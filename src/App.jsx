@@ -12,6 +12,7 @@ import Login from "./pages/Login";
 import AddStaff from "./pages/AddStaff";
 import AuditLogs from "./pages/AuditLogs";
 import ChangePassword from "./pages/ChangePassword";
+import ManageUsers from "./pages/ManageUsers";
 
 export default function App() {
   return (
@@ -34,6 +35,8 @@ export default function App() {
             <Route path="/add-staff" element={<AddStaff />} />
             <Route path="/audit-logs" element={<AuditLogs />} />
             <Route path="/change-password" element={<ChangePassword />} />
+            <Route path="/manage-users" element={<ManageUsers />} />
+            <Route path="/users" element={<Navigate to="/manage-users" replace />} />
 
             {/* Fallback */}
             <Route path="*" element={<Navigate to="/" replace />} />

@@ -44,25 +44,70 @@ export default function ReportIncident() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittedSuccess, setSubmittedSuccess] = useState(false);
 
-  // Live Camera Capture Evidence States
+  // Real-Time Live Camera Capture States (Blocks Gallery / Library Uploads)
   const [capturedImage, setCapturedImage] = useState(null);
-  const fileInputRef = useRef(null);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [cameraError, setCameraError] = useState("");
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const mediaStreamRef = useRef(null);
 
   const miniMapContainerRef = useRef(null);
   const miniMapInstanceRef = useRef(null);
   const draftMarkerRef = useRef(null);
 
-  // Handle live camera capture and restrict photo library
-  const handleCameraCapture = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setCapturedImage(reader.result);
-      };
-      reader.readAsDataURL(file);
+  // Open live webcam / hardware camera stream
+  const handleOpenLiveCamera = async () => {
+    setCameraError("");
+    setIsCameraOpen(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" },
+        audio: false
+      });
+      mediaStreamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (err) {
+      console.error("Camera access failed:", err);
+      setCameraError("Camera access was denied or is unavailable. Please allow permissions to snap live evidence.");
+      setIsCameraOpen(false);
     }
   };
+
+  // Close live camera stream
+  const handleCloseCamera = () => {
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
+    }
+    setIsCameraOpen(false);
+  };
+
+  // Take snapshot from active live stream
+  const handleCaptureSnapshot = () => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL("image/jpeg");
+      setCapturedImage(dataUrl);
+      handleCloseCamera();
+    }
+  };
+
+  // Cleanup camera tracks on component unmount
+  useEffect(() => {
+    return () => {
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, []);
 
   // Initialize mini picker map
   useEffect(() => {
@@ -164,7 +209,7 @@ export default function ReportIncident() {
     }
 
     if (!capturedImage) {
-      alert("Live camera photo evidence is required to submit an emergency report and prevent fake or prank submissions.");
+      alert("Real-time live camera photo evidence is mandatory to submit an emergency report and prevent fake or prank submissions.");
       return;
     }
 
@@ -196,27 +241,16 @@ export default function ReportIncident() {
   };
 
   return (
-    <div className="report-incident-page">
-      <div className="report-page-shell">
+    <div className="report-incident-page-wrapper">
+      <div className="report-page-container">
         {/* Navigation back bar */}
-        <div className="report-top-bar">
-          <button
-            type="button"
-            className="back-link-btn"
-            onClick={() => navigate(-1)}
-          >
-            <ArrowLeft size={16} />
-            <span>Back to Main Page</span>
-          </button>
-        </div>
-
-        <div className="report-header-banner">
-          <div className="report-header-icon-box">
-            <ShieldAlert size={28} />
-          </div>
-          <div>
-            <h1 className="report-page-title">Official Incident Reporting Portal</h1>
-          </div>
+        <div className="report-nav-back">
+          <Link to="/" className="btn-back-link">
+            <ArrowLeft size={16} /> Back to Main Page
+          </Link>
+          <span className="report-badge-indicator">
+            <AlertTriangle size={14} /> Official Incident Reporting Portal
+          </span>
         </div>
 
         {submittedSuccess ? (
@@ -226,7 +260,7 @@ export default function ReportIncident() {
             </div>
             <h2>Incident Successfully Dispatched & Logged!</h2>
             <p className="success-sub">
-              Your report with live camera evidence has been received by Barangay Operations Command.
+              Your report with real-time camera evidence has been received by Barangay Operations Command.
               Responders have been notified and a live pin has been activated on the incident map.
             </p>
             <div className="redirect-countdown">
@@ -245,7 +279,7 @@ export default function ReportIncident() {
               <div>
                 <h1 className="report-card-title">Report an Incident or Emergency</h1>
                 <p className="report-card-subtitle">
-                  Provide exact details and live photo evidence to immediately alert Barangay Tanod, BFP, BHERT, or DRRMO teams.
+                  Provide exact details and real-time live camera evidence to immediately alert Barangay Tanod, BFP, BHERT, or DRRMO teams.
                 </p>
               </div>
             </div>
@@ -400,53 +434,79 @@ export default function ReportIncident() {
                 />
               </div>
 
-              {/* 6. Live Camera Capture Evidence (Anti-Prank Enforcement) */}
-              <div className="form-section" style={{ background: "#f8fafc", border: "1px dashed #cbd5e1", padding: "1.25rem", borderRadius: "1rem" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.75rem" }}>
-                  <div>
-                    <label className="input-label" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                      <Camera size={16} className="text-rose-600" />
-                      Live Camera Evidence Required <span className="required-star">*</span>
-                    </label>
-                    <p className="input-subtext" style={{ margin: "2px 0 0", fontSize: "0.8rem", color: "#64748b" }}>
-                      To prevent false reports and pranks, photo library uploads are disabled. Please snap a live photo using your device camera.
-                    </p>
-                  </div>
+              {/* 6. Real-Time Live Camera Evidence Upload (Anti-Troll / Gallery Blocked) */}
+              <div className="form-section" style={{ background: "#f8fafc", border: "2px dashed #f43f5e", padding: "1.25rem", borderRadius: "1rem", marginBottom: "1.5rem" }}>
+                <div style={{ marginBottom: "0.75rem" }}>
+                  <label className="input-label" style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.95rem", fontWeight: "700", color: "#e11d48" }}>
+                    <Camera size={18} />
+                    Real-Time Live Camera Evidence <span className="required-star">*</span>
+                  </label>
+                  <p className="input-subtext" style={{ margin: "2px 0 0", fontSize: "0.8rem", color: "#64748b" }}>
+                    Photo library and gallery uploads are strictly disabled to prevent fake reports and pranks[cite: 18]. Snap a live photo on the spot.
+                  </p>
                 </div>
 
-                {/* Hidden native file input configured strictly for rear camera capture */}
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  accept="image/*"
-                  capture="environment"
-                  style={{ display: "none" }}
-                  onChange={handleCameraCapture}
-                />
+                {cameraError && (
+                  <div style={{ padding: "10px", background: "#fef2f2", color: "#dc2626", borderRadius: "8px", fontSize: "0.8rem", marginBottom: "10px", border: "1px solid #fecaca" }}>
+                    {cameraError}
+                  </div>
+                )}
 
                 {capturedImage ? (
-                  <div style={{ position: "relative", width: "100%", height: "240px", borderRadius: "0.75rem", overflow: "hidden", border: "1px solid #cbd5e1", background: "#000" }}>
-                    <img src={capturedImage} alt="Live Evidence" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  <div style={{ position: "relative", width: "100%", height: "260px", borderRadius: "0.75rem", overflow: "hidden", border: "1px solid #cbd5e1", background: "#000" }}>
+                    <img src={capturedImage} alt="Live Evidence Captured" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                     <button
                       type="button"
-                      onClick={() => setCapturedImage(null)}
-                      style={{ position: "absolute", top: "10px", right: "10px", background: "rgba(0,0,0,0.8)", color: "#fff", border: "none", padding: "8px 12px", borderRadius: "8px", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px", fontSize: "0.78rem", fontWeight: "600" }}
+                      onClick={() => {
+                        setCapturedImage(null);
+                        handleOpenLiveCamera();
+                      }}
+                      style={{ position: "absolute", top: "10px", right: "10px", background: "rgba(0,0,0,0.85)", color: "#fff", border: "none", padding: "8px 12px", borderRadius: "8px", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px", fontSize: "0.78rem", fontWeight: "600" }}
                     >
-                      <X size={14} /> Retake Live Photo
+                      <RefreshCw size={14} /> Retake Live Photo
                     </button>
+                  </div>
+                ) : isCameraOpen ? (
+                  <div style={{ position: "relative", width: "100%", background: "#000", borderRadius: "0.75rem", overflow: "hidden", textAlign: "center" }}>
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      style={{ width: "100%", maxHeight: "300px", objectFit: "cover", display: "block" }}
+                    />
+                    <div style={{ padding: "12px", background: "rgba(0,0,0,0.8)", display: "flex", justifyContent: "center", gap: "10px" }}>
+                      <button
+                        type="button"
+                        onClick={handleCaptureSnapshot}
+                        style={{ background: "#e11d48", color: "#fff", border: "none", padding: "10px 20px", borderRadius: "9999px", fontWeight: "700", fontSize: "0.85rem", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}
+                      >
+                        <Camera size={16} /> Capture Live Snapshot
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCloseCamera}
+                        style={{ background: "#64748b", color: "#fff", border: "none", padding: "10px 16px", borderRadius: "9999px", fontWeight: "600", fontSize: "0.85rem", cursor: "pointer" }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <div
-                    onClick={() => fileInputRef.current && fileInputRef.current.click()}
-                    style={{ textAlign: "center", padding: "2rem 1rem", background: "#ffffff", borderRadius: "0.75rem", border: "2px dashed #f43f5e", cursor: "pointer", transition: "all 0.2s ease" }}
+                    onClick={handleOpenLiveCamera}
+                    style={{ textAlign: "center", padding: "2rem 1rem", background: "#ffffff", borderRadius: "0.75rem", border: "2px dashed #cbd5e1", cursor: "pointer", transition: "all 0.2s ease" }}
+                    onMouseEnter={(e) => e.currentTarget.style.borderColor = "#f43f5e"}
+                    onMouseLeave={(e) => e.currentTarget.style.borderColor = "#cbd5e1"}
                   >
                     <div style={{ width: "54px", height: "54px", borderRadius: "14px", background: "#fef2f2", color: "#dc2626", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px" }}>
                       <Camera size={28} />
                     </div>
-                    <p style={{ fontSize: "0.95rem", fontWeight: "700", color: "#1e293b", marginBottom: "4px" }}>Tap to Open Device Live Camera</p>
-                    <p style={{ fontSize: "0.8rem", color: "#64748b", margin: 0 }}>Required to verify emergency and prevent troll / fake reports</p>
+                    <p style={{ fontSize: "0.95rem", fontWeight: "700", color: "#1e293b", marginBottom: "4px" }}>Open Real-Time Live Camera</p>
+                    <p style={{ fontSize: "0.8rem", color: "#64748b", margin: 0 }}>Click to activate camera viewfinder stream (Gallery uploads blocked)[cite: 18]</p>
                   </div>
                 )}
+                <canvas ref={canvasRef} style={{ display: "none" }} />
               </div>
 
               {/* 7. Reporter Information */}

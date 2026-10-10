@@ -45,7 +45,8 @@ export default function AdminApprovals() {
     const matchesSearch =
       fullName.includes(search) || email.includes(search) || contact.includes(search);
       
-    const matchesSitio = selectedSitio === "ALL" || user?.sitioAddress === selectedSitio;
+    // Include resident sitios or admin accounts
+    const matchesSitio = selectedSitio === "ALL" || user?.sitioAddress === selectedSitio || user?.role === "admin";
 
     return matchesTab && matchesSearch && matchesSitio;
   });
@@ -56,7 +57,7 @@ export default function AdminApprovals() {
 
   const handleConfirmReject = (userId) => {
     if (!rejectionReasonInput.trim()) {
-      alert("Please provide a reason for rejecting the residency application.");
+      alert("Please provide a reason for rejecting the application.");
       return;
     }
     if (rejectResident) {
@@ -89,7 +90,7 @@ export default function AdminApprovals() {
 
       <main style={{ maxWidth: "1100px", margin: "1.5rem auto", padding: "0 1rem", fontFamily: "sans-serif" }}>
         
-        {/* RESIDENT APPROVALS VIEW */}
+        {/* RESIDENT & ADMIN APPROVALS VIEW */}
         {adminMainTab === "approvals" && (
           <div>
             <div style={{ background: "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)", color: "white", padding: "1.5rem 1.75rem", borderRadius: "16px", marginBottom: "1.5rem", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
@@ -97,8 +98,8 @@ export default function AdminApprovals() {
                 <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#fef08a", textTransform: "uppercase" }}>
                   🏛️ Barangay Anupul • Official Portal
                 </span>
-                <h1 style={{ fontSize: "1.5rem", fontWeight: 800, margin: "0.25rem 0 0" }}>Residency Verification Panel</h1>
-                <p style={{ fontSize: "0.85rem", color: "#94a3b8", margin: "0.25rem 0 0" }}>Validate registered residents and inspect proof documents.</p>
+                <h1 style={{ fontSize: "1.5rem", fontWeight: 800, margin: "0.25rem 0 0" }}>Account Verification Panel</h1>
+                <p style={{ fontSize: "0.85rem", color: "#94a3b8", margin: "0.25rem 0 0" }}>Validate registered residents and incoming barangay official accounts.</p>
               </div>
 
               <div style={{ display: "flex", gap: "0.75rem" }}>
@@ -129,7 +130,7 @@ export default function AdminApprovals() {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 220px", gap: "0.75rem" }}>
                 <input type="text" placeholder="Search by name, email, or contact number..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{ padding: "0.65rem 0.85rem", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }} />
                 <select value={selectedSitio} onChange={(e) => setSelectedSitio(e.target.value)} style={{ padding: "0.65rem 0.85rem", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.88rem" }}>
-                  <option value="ALL">All Sitio Locations</option>
+                  <option value="ALL">All Locations / Roles</option>
                   {SITIO_LIST.map((sitio) => <option key={sitio} value={sitio}>{sitio}</option>)}
                 </select>
               </div>
@@ -138,14 +139,15 @@ export default function AdminApprovals() {
             <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
               {filteredUsers.length === 0 ? (
                 <div style={{ textAlign: "center", padding: "3rem", backgroundColor: "white", borderRadius: "12px", border: "1px solid #e2e8f0", color: "#64748b" }}>
-                  <h3>No Resident Records Found</h3>
+                  <h3>No Account Records Found</h3>
                   <p style={{ fontSize: "0.85rem" }}>
-                    {approvalSubTab === "pending" ? "There are currently no pending residency applications to review." : `No ${approvalSubTab} resident records match your search criteria.`}
+                    {approvalSubTab === "pending" ? "There are currently no pending verification requests to review." : `No ${approvalSubTab} records match your search criteria.`}
                   </p>
                 </div>
               ) : (
                 filteredUsers.map((user) => {
                   const status = user?.verificationStatus || "pending";
+                  const isAdminReg = user?.role === "admin";
                   const userReports = getUserIncidents(user);
                   const isExpanded = !!expandedUserReports[user.id];
 
@@ -153,53 +155,73 @@ export default function AdminApprovals() {
                     <div key={user.id} style={{ backgroundColor: "white", padding: "1.35rem", borderRadius: "12px", border: "1px solid #e2e8f0", borderLeft: status === "approved" ? "5px solid #10b981" : status === "rejected" ? "5px solid #ef4444" : "5px solid #f59e0b" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1rem" }}>
                         <div>
-                          <h3 style={{ fontSize: "1.15rem", fontWeight: 800, margin: 0, color: "#0f172a" }}>{user.firstName} {user.lastName}</h3>
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                            <h3 style={{ fontSize: "1.15rem", fontWeight: 800, margin: 0, color: "#0f172a" }}>
+                              {user.firstName} {user.lastName}
+                            </h3>
+                            {isAdminReg && (
+                              <span style={{ fontSize: "0.68rem", backgroundColor: "#3b82f6", color: "white", padding: "0.1rem 0.4rem", borderRadius: "4px", fontWeight: 700 }}>
+                                ADMIN APPLICANT
+                              </span>
+                            )}
+                          </div>
                           <span style={{ fontSize: "0.75rem", color: "#64748b" }}>Submitted: {user.submittedAt || "Recently"}</span>
                         </div>
                         <span style={{ fontSize: "0.72rem", fontWeight: 700, padding: "0.25rem 0.65rem", borderRadius: "9999px", backgroundColor: status === "approved" ? "#dcfce7" : status === "rejected" ? "#fee2e2" : "#fef3c7", color: status === "approved" ? "#166534" : status === "rejected" ? "#991b1b" : "#92400e" }}>
-                          {status === "approved" ? "✓ Approved Resident" : status === "rejected" ? "✕ Rejected" : "⏳ Pending Verification"}
+                          {status === "approved" ? (isAdminReg ? "✓ Approved Official" : "✓ Approved Resident") : status === "rejected" ? "✕ Rejected" : "⏳ Pending Verification"}
                         </span>
                       </div>
 
                       <div style={{ backgroundColor: "#f8fafc", padding: "1rem", borderRadius: "10px", border: "1px solid #e2e8f0", marginBottom: "1rem", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", fontSize: "0.85rem" }}>
-                        <div><strong>Sitio / Street:</strong> {user.sitioAddress || "N/A"}</div>
-                        <div><strong>Contact Number:</strong> {user.contactNumber || "N/A"}</div>
-                        <div style={{ gridColumn: "span 2" }}><strong>Email Address:</strong> {user.email || "N/A"}</div>
-                        <div style={{ gridColumn: "span 2", paddingTop: "0.5rem", borderTop: "1px dashed #cbd5e1" }}>
-                          <strong>Proof of Residency Document:</strong>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "white", padding: "0.5rem 0.75rem", borderRadius: "6px", border: "1px solid #e2e8f0", marginTop: "0.25rem" }}>
-                            <span>📄 {user.proofOfResidency?.name || "Official Document Upload"}</span>
-                            <button type="button" onClick={() => alert(`Inspecting document for ${user.firstName} ${user.lastName}`)} style={{ padding: "0.25rem 0.5rem", border: "1px solid #cbd5e1", borderRadius: "4px", backgroundColor: "#f8fafc", cursor: "pointer", fontSize: "0.75rem" }}>Inspect File</button>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div style={{ marginBottom: "1rem" }}>
-                        <button type="button" onClick={() => toggleUserReports(user.id)} style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.65rem 0.85rem", backgroundColor: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: "8px", cursor: "pointer", fontSize: "0.82rem", fontWeight: 700, color: "#1e293b" }}>
-                          <span>🚨 Reported Incidents by User ({userReports.length})</span>
-                          <span>{isExpanded ? "▲ Hide" : "▼ View Reports"}</span>
-                        </button>
-
-                        {isExpanded && (
-                          <div style={{ marginTop: "0.5rem", padding: "0.75rem", backgroundColor: "#fafafa", border: "1px solid #e2e8f0", borderRadius: "8px" }}>
-                            {userReports.length === 0 ? (
-                              <p style={{ margin: 0, fontSize: "0.8rem", color: "#64748b", fontStyle: "italic" }}>No accident reports submitted by this resident.</p>
-                            ) : (
-                              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                                {userReports.map((report) => (
-                                  <div key={report.id} style={{ padding: "0.65rem", backgroundColor: "white", border: "1px solid #cbd5e1", borderRadius: "6px", borderLeft: "4px solid #ef4444" }}>
-                                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", fontWeight: 700 }}>
-                                      <span style={{ color: "#dc2626" }}>{report.type || "Accident Report"}</span>
-                                      <span style={{ color: "#64748b" }}>{report.timestamp || "Recent"}</span>
-                                    </div>
-                                    <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.8rem" }}><strong>Location:</strong> {report.location || report.sitio || "Barangay Anupul"}</p>
-                                  </div>
-                                ))}
+                        {isAdminReg ? (
+                          <>
+                            <div style={{ gridColumn: "span 2" }}><strong>Official Position:</strong> {user.officialPosition || "Barangay Official"}</div>
+                            <div style={{ gridColumn: "span 2" }}><strong>Official Email:</strong> {user.email || "N/A"}</div>
+                          </>
+                        ) : (
+                          <>
+                            <div><strong>Sitio / Street:</strong> {user.sitioAddress || "N/A"}</div>
+                            <div><strong>Contact Number:</strong> {user.contactNumber || "N/A"}</div>
+                            <div style={{ gridColumn: "span 2" }}><strong>Email Address:</strong> {user.email || "N/A"}</div>
+                            <div style={{ gridColumn: "span 2", paddingTop: "0.5rem", borderTop: "1px dashed #cbd5e1" }}>
+                              <strong>Proof of Residency Document:</strong>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "white", padding: "0.5rem 0.75rem", borderRadius: "6px", border: "1px solid #e2e8f0", marginTop: "0.25rem" }}>
+                                <span>📄 {user.proofOfResidency?.name || "Official Document Upload"}</span>
+                                <button type="button" onClick={() => alert(`Inspecting document for ${user.firstName} ${user.lastName}`)} style={{ padding: "0.25rem 0.5rem", border: "1px solid #cbd5e1", borderRadius: "4px", backgroundColor: "#f8fafc", cursor: "pointer", fontSize: "0.75rem" }}>Inspect File</button>
                               </div>
-                            )}
-                          </div>
+                            </div>
+                          </>
                         )}
                       </div>
+
+                      {!isAdminReg && (
+                        <div style={{ marginBottom: "1rem" }}>
+                          <button type="button" onClick={() => toggleUserReports(user.id)} style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.65rem 0.85rem", backgroundColor: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: "8px", cursor: "pointer", fontSize: "0.82rem", fontWeight: 700, color: "#1e293b" }}>
+                            <span>🚨 Reported Incidents by User ({userReports.length})</span>
+                            <span>{isExpanded ? "▲ Hide" : "▼ View Reports"}</span>
+                          </button>
+
+                          {isExpanded && (
+                            <div style={{ marginTop: "0.5rem", padding: "0.75rem", backgroundColor: "#fafafa", border: "1px solid #e2e8f0", borderRadius: "8px" }}>
+                              {userReports.length === 0 ? (
+                                <p style={{ margin: 0, fontSize: "0.8rem", color: "#64748b", fontStyle: "italic" }}>No accident reports submitted by this resident.</p>
+                              ) : (
+                                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                                  {userReports.map((report) => (
+                                    <div key={report.id} style={{ padding: "0.65rem", backgroundColor: "white", border: "1px solid #cbd5e1", borderRadius: "6px", borderLeft: "4px solid #ef4444" }}>
+                                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", fontWeight: 700 }}>
+                                        <span style={{ color: "#dc2626" }}>{report.type || "Accident Report"}</span>
+                                        <span style={{ color: "#64748b" }}>{report.timestamp || "Recent"}</span>
+                                      </div>
+                                      <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.8rem" }}><strong>Location:</strong> {report.location || report.sitio || "Barangay Anupul"}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       {status === "pending" && (
                         <div style={{ display: "flex", gap: "0.75rem", justifyContent: "flex-end" }}>
@@ -211,8 +233,8 @@ export default function AdminApprovals() {
                             </div>
                           ) : (
                             <>
-                              <button type="button" onClick={() => setRejectingUserId(user.id)} style={{ padding: "0.5rem 1rem", backgroundColor: "#fee2e2", color: "#ef4444", border: "1px solid #fecaca", borderRadius: "8px", cursor: "pointer", fontWeight: 700 }}>✕ Reject Application</button>
-                              <button type="button" onClick={() => approveResident && approveResident(user.id)} style={{ padding: "0.5rem 1.25rem", backgroundColor: "#10b981", color: "white", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: 700 }}>✓ Approve Resident Account</button>
+                              <button type="button" onClick={() => setRejectingUserId(user.id)} style={{ padding: "0.5rem 1rem", backgroundColor: "#fee2e2", color: "#ef4444", border: "1px solid #fecaca", borderRadius: "8px", cursor: "pointer", fontWeight: 700 }}>✕ Reject</button>
+                              <button type="button" onClick={() => approveResident && approveResident(user.id)} style={{ padding: "0.5rem 1.25rem", backgroundColor: "#10b981", color: "white", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: 700 }}>✓ Approve Account</button>
                             </>
                           )}
                         </div>

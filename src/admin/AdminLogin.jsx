@@ -4,42 +4,51 @@ import { useAuth } from "../context/AuthContext";
 
 export default function AdminLogin() {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const auth = useAuth() || {};
+  const { login } = auth;
 
-  const [adminCredentials, setAdminCredentials] = useState({
-    identifier: "",
-    password: "",
-  });
+  const [identifier, setIdentifier] = useState("");
+  const [password, setPassword] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
 
-  const [errorMessage, setErrorMessage] = useState("");
-
-  const handleAdminLogin = (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-    setErrorMessage("");
+    setErrorMsg("");
 
-    if (!adminCredentials.identifier.trim() || !adminCredentials.password) {
-      setErrorMessage("Please fill in both admin username and password.");
+    if (!identifier.trim() || !password) {
+      setErrorMsg("Please enter your admin email/username and password.");
       return;
     }
 
-    if (
-      adminCredentials.identifier.trim().toLowerCase() === "admin@anupul.gov" &&
-      adminCredentials.password === "admin123"
-    ) {
-      login("admin@anupul.gov", "admin123");
-      navigate("/admin-approvals");
-    } else {
-      const result = login(adminCredentials.identifier, adminCredentials.password);
-      if (result.success) {
-        navigate("/admin-approvals");
+    const cleanId = identifier.trim().toLowerCase();
+
+    // Enforce strict separation: Only allow @anupul.gov emails on the admin login portal
+    if (!cleanId.endsWith("@anupul.gov")) {
+      setErrorMsg("Access denied. Admin portal is strictly for @anupul.gov official accounts.");
+      return;
+    }
+
+    if (login) {
+      const result = login(identifier, password);
+
+      if (result && result.success) {
+        if (result.user?.role === "admin" || cleanId === "admin@anupul.gov") {
+          navigate("/admin-approvals");
+        } else {
+          setErrorMsg("This account does not have administrator privileges.");
+        }
+      } else if (result?.isPending) {
+        setErrorMsg("⏳ Your official account is currently pending approval by the Head Barangay Official. Please wait for authorization before logging in.");
+      } else if (result?.isRejected) {
+        setErrorMsg("✕ Your official account application was rejected by the Head Barangay Official.");
       } else {
-        setErrorMessage("Invalid Barangay Admin credentials. Access denied.");
+        setErrorMsg(result?.message || "Invalid Barangay Admin credentials. Access denied.");
       }
     }
   };
 
   return (
-    <div style={{ maxWidth: "450px", margin: "3rem auto", padding: "0 1rem", fontFamily: "sans-serif" }}>
+    <div style={{ maxWidth: "440px", margin: "3rem auto", padding: "0 1rem", fontFamily: "sans-serif" }}>
       <button
         type="button"
         onClick={() => navigate("/login")}
@@ -49,52 +58,90 @@ export default function AdminLogin() {
       </button>
 
       <div style={{ backgroundColor: "white", borderRadius: "16px", border: "1px solid #e2e8f0", overflow: "hidden", boxShadow: "0 10px 25px -5px rgba(0,0,0,0.1)" }}>
-        <div style={{ background: "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)", padding: "1.75rem", textAlign: "center", color: "white" }}>
-          <h2 style={{ fontSize: "1.3rem", fontWeight: 800, margin: 0 }}>ALERT0 Admin Access</h2>
-          <p style={{ fontSize: "0.75rem", color: "#94a3b8", margin: "0.25rem 0 0", textTransform: "uppercase" }}>
-            Barangay Anupul • Official Verification Portal
+        
+        {/* Header */}
+        <div style={{ background: "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)", padding: "1.5rem", textAlign: "center", color: "white" }}>
+          <h2 style={{ fontSize: "1.35rem", fontWeight: 800, margin: 0, color: "white" }}>
+            ALERT0 Admin Access
+          </h2>
+          <p style={{ fontSize: "0.72rem", color: "#94a3b8", textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em", marginTop: "0.25rem" }}>
+            BARANGAY ANUPUL • OFFICIAL VERIFICATION PORTAL
           </p>
         </div>
 
         <div style={{ padding: "1.5rem" }}>
-          {errorMessage && (
-            <div style={{ padding: "0.65rem 0.85rem", backgroundColor: "#fee2e2", color: "#991b1b", borderRadius: "8px", fontSize: "0.82rem", fontWeight: 600, marginBottom: "1rem" }}>
-              ⚠️ {errorMessage}
+          {errorMsg && (
+            <div style={{ 
+              padding: "0.85rem", 
+              backgroundColor: errorMsg.includes("⏳") ? "#fef3c7" : "#fee2e2", 
+              color: errorMsg.includes("⏳") ? "#92400e" : "#991b1b", 
+              borderRadius: "8px", 
+              fontSize: "0.82rem", 
+              fontWeight: 600, 
+              lineHeight: "1.4",
+              marginBottom: "1.25rem",
+              border: errorMsg.includes("⏳") ? "1px solid #fde68a" : "1px solid #fecaca"
+            }}>
+              {errorMsg}
             </div>
           )}
 
-          <form onSubmit={handleAdminLogin} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
             <div>
-              <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, marginBottom: "0.25rem" }}>Admin Email / Username</label>
+              <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, marginBottom: "0.35rem" }}>
+                Official Admin Email (@anupul.gov)
+              </label>
               <input
-                type="text"
-                value={adminCredentials.identifier}
-                onChange={(e) => setAdminCredentials({ ...adminCredentials, identifier: e.target.value })}
-                placeholder="admin@anupul.gov"
+                type="email"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                placeholder="official@anupul.gov"
                 style={{ width: "100%", padding: "0.65rem", border: "1px solid #cbd5e1", borderRadius: "8px" }}
               />
             </div>
 
             <div>
-              <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, marginBottom: "0.25rem" }}>Password</label>
+              <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, marginBottom: "0.35rem" }}>
+                Password
+              </label>
               <input
                 type="password"
-                value={adminCredentials.password}
-                onChange={(e) => setAdminCredentials({ ...adminCredentials, password: e.target.value })}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 style={{ width: "100%", padding: "0.65rem", border: "1px solid #cbd5e1", borderRadius: "8px" }}
               />
             </div>
 
-            <div style={{ padding: "0.5rem 0.75rem", backgroundColor: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "6px", fontSize: "0.72rem", color: "#64748b" }}>
-              💡 Demo Credentials: <code>admin@anupul.gov</code> / <code>admin123</code>
+            <div style={{ backgroundColor: "#f8fafc", padding: "0.65rem", borderRadius: "8px", border: "1px solid #e2e8f0", fontSize: "0.75rem", color: "#64748b" }}>
+              💡 Super Admin: <code>admin@anupul.gov</code> / <code>admin123</code>
             </div>
 
-            <button type="submit" style={{ padding: "0.75rem", backgroundColor: "#0f172a", color: "white", border: "none", borderRadius: "8px", fontWeight: 700, cursor: "pointer" }}>
+            <button
+              type="submit"
+              style={{
+                padding: "0.75rem",
+                backgroundColor: "#0f172a",
+                color: "white",
+                border: "none",
+                borderRadius: "8px",
+                fontWeight: 700,
+                cursor: "pointer",
+                marginTop: "0.25rem"
+              }}
+            >
               Log In as Barangay Official
             </button>
           </form>
         </div>
+
+        <div style={{ background: "#f8fafc", borderTop: "1px solid #e2e8f0", padding: "0.85rem 1.25rem", textAlign: "center", fontSize: "0.78rem", color: "#64748b" }}>
+          New Barangay Official?{" "}
+          <a href="/admin/signup" style={{ color: "#2563eb", fontWeight: 700, textDecoration: "none" }}>
+            Register Official Account →
+          </a>
+        </div>
+
       </div>
     </div>
   );

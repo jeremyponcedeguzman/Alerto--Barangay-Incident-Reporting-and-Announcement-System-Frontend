@@ -16,6 +16,7 @@ import PendingVerification from "./pages/PendingVerification";
 // Admin Components
 import AdminApprovals from "./admin/AdminApprovals";
 import AdminLogin from "./admin/AdminLogin";
+import AdminSignup from "./admin/AdminSignup";
 
 // Protected Route Guard for Residents
 function ProtectedResidentRoute({ children }) {
@@ -25,7 +26,6 @@ function ProtectedResidentRoute({ children }) {
     return <Navigate to="/login" replace />;
   }
 
-  // Allow admins or approved residents
   const isAdmin = currentUser?.email === "admin@anupul.gov" || currentUser?.role === "admin";
 
   if (!isAdmin && currentUser?.verificationStatus !== "approved") {
@@ -43,6 +43,7 @@ function AppContent() {
     location.pathname === "/login" ||
     location.pathname === "/signup" ||
     location.pathname === "/admin/login" ||
+    location.pathname === "/admin/signup" ||
     location.pathname === "/admin-approvals";
 
   return (
@@ -53,6 +54,7 @@ function AppContent() {
           {/* Public Auth Routes */}
           <Route path="/login" element={<Login />} />
           <Route path="/admin/login" element={<AdminLogin />} />
+          <Route path="/admin/signup" element={<AdminSignup />} />
 
           {/* Dedicated Admin Portal Route */}
           <Route path="/admin-approvals" element={<AdminApprovals />} />

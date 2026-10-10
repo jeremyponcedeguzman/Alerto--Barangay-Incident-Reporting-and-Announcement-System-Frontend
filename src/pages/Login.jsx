@@ -66,6 +66,14 @@ export default function Login() {
     setErrors(newErrors);
 
     if (Object.keys(newErrors).length === 0 && login) {
+      const cleanId = loginData.identifier.trim().toLowerCase();
+
+      // Prevent barangay officials from logging in via the resident portal
+      if (cleanId.endsWith("@anupul.gov") || cleanId === "admin@anupul.gov") {
+        setAuthError("Barangay officials must log in through the Official Admin Portal.");
+        return;
+      }
+
       const result = login(loginData.identifier, loginData.password);
       if (result && result.success) {
         navigate("/");
@@ -91,6 +99,8 @@ export default function Login() {
       newErrors.email = "Email address is required.";
     } else if (!/\S+@\S+\.\S+/.test(signupData.email)) {
       newErrors.email = "Please enter a valid email address.";
+    } else if (signupData.email.toLowerCase().endsWith("@anupul.gov")) {
+      newErrors.email = "Residents cannot use an @anupul.gov email. Please use a personal email.";
     } else {
       const existingEmailUser = (userDatabase || []).find(
         (user) => user?.email?.toLowerCase().trim() === signupData.email.toLowerCase().trim()
@@ -165,7 +175,7 @@ export default function Login() {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
         </svg>
         <div style={{ fontSize: "0.82rem", lineHeight: "1.4" }}>
-          <strong>Notice:</strong> ALERT0 is an emergency accident reporting system currently exclusive to verified residents of <strong>Barangay Anupul, Bamban, Tarlac</strong>.
+          <strong>Notice:</strong> ALERT0 is an emergency accident reporting system currently exclusive to verified residents of <strong>Barangay Anupul, Bamban, Tarlac</strong>[cite: 1, 3].
         </div>
       </div>
 
@@ -186,7 +196,7 @@ export default function Login() {
             </div>
           </div>
           <p style={{ fontSize: "0.72rem", color: "#fee2e2", textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.05em", marginTop: "0.25rem" }}>
-            Barangay Anupul • Bamban, Tarlac
+            Barangay Anupul • Bamban, Tarlac[cite: 3]
           </p>
         </div>
 
@@ -228,7 +238,7 @@ export default function Login() {
                     type="text"
                     value={loginData.identifier}
                     onChange={(e) => setLoginData({ ...loginData, identifier: e.target.value })}
-                    placeholder="e.g. resident@anupul.gov or 09171234567"
+                    placeholder="e.g. resident@gmail.com or 09171234567"
                     className="form-input with-icon"
                     style={errors.identifier ? { borderColor: "var(--emergency)" } : {}}
                   />
@@ -290,7 +300,7 @@ export default function Login() {
                     style={{ marginTop: "0.2rem" }}
                   />
                   <span>
-                    I explicitly confirm that I am a bona fide resident of <strong>Barangay Anupul, Bamban, Tarlac</strong>.
+                    I explicitly confirm that I am a bona fide resident of <strong>Barangay Anupul, Bamban, Tarlac</strong>[cite: 1, 3].
                   </span>
                 </label>
                 {errors.isAnupulResident && <p style={{ fontSize: "0.75rem", color: "var(--emergency)", marginTop: "0.3rem", fontWeight: 600 }}>{errors.isAnupulResident}</p>}
@@ -356,12 +366,12 @@ export default function Login() {
               </div>
 
               <div className="form-group">
-                <label className="input-label">Email Address <span className="required-star">*</span></label>
+                <label className="input-label">Email Address (Personal / Gmail) <span className="required-star">*</span></label>
                 <input
                   type="email"
                   value={signupData.email}
                   onChange={(e) => handleSignupInputChange("email", e.target.value)}
-                  placeholder="resident@anupul.gov"
+                  placeholder="resident@gmail.com"
                   className="form-input"
                   style={errors.email ? { borderColor: "var(--emergency)" } : {}}
                 />

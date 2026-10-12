@@ -10,21 +10,29 @@ import {
   Radio,
   ShieldCheck,
   ChevronDown,
-  LogOut
+  LogOut,
+  User,
+  KeyRound,
+  ShieldAlert,
+  Users
 } from "lucide-react";
 import { useIncidents, RESPONDER_ROLES } from "../context/IncidentContext";
+import { useAuth } from "../context/AuthContext";
 
 export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
   const { userReports, activeRole, setActiveRole } = useIncidents();
+  const { currentUser, logout } = useAuth();
   const navigate = useNavigate();
 
   const currentRoleObj =
     RESPONDER_ROLES.find((r) => r.id === activeRole) || RESPONDER_ROLES[0];
 
+  const isAdmin = currentUser?.role === "admin" || currentUser?.email === "admin@anupul.gov";
+
   const handleLogout = () => {
-    alert("Logged out of Barangay System (Frontend prototype - redirecting to login)");
+    if (logout) logout();
     navigate("/login");
   };
 
@@ -40,7 +48,7 @@ export default function Navbar() {
             <div className="brand-name">
               ALERTO <span className="brand-badge">LIVE</span>
             </div>
-            <div className="brand-sub">Brgy. [Barangay Name]</div>
+            <div className="brand-sub">Brgy. Anupul</div>
           </div>
         </Link>
 
@@ -82,6 +90,29 @@ export default function Navbar() {
               <span className="nav-count-badge">{userReports.length}</span>
             )}
           </NavLink>
+
+          <NavLink
+            to="/profile"
+            className={({ isActive }) =>
+              `nav-link ${isActive ? "nav-link-active" : ""}`
+            }
+          >
+            <User size={18} />
+            <span>Profile</span>
+          </NavLink>
+
+          {isAdmin && (
+            <NavLink
+              to="/admin-approvals"
+              className={({ isActive }) =>
+                `nav-link ${isActive ? "nav-link-active" : ""}`
+              }
+              style={{ color: "#38bdf8", fontWeight: 700 }}
+            >
+              <ShieldAlert size={18} />
+              <span>Admin Portal</span>
+            </NavLink>
+          )}
         </nav>
 
         {/* Right Action Area */}
@@ -92,12 +123,11 @@ export default function Navbar() {
               type="button"
               className="role-selector-btn"
               onClick={() => setRoleDropdownOpen(!roleDropdownOpen)}
-              title="Switch user / responder perspective (Placeholder)"
+              title="Switch user / responder perspective"
             >
               <ShieldCheck size={16} className="role-icon" />
               <span className="role-label">
-                Role: {currentRoleObj.label}{" "}
-                <span className="placeholder-tag">(Placeholder Role Selector)</span>
+                Role: {currentRoleObj.label}
               </span>
               <ChevronDown size={14} />
             </button>
@@ -108,8 +138,7 @@ export default function Navbar() {
                 onMouseLeave={() => setRoleDropdownOpen(false)}
               >
                 <div className="role-dropdown-header">
-                  View Map & Incidents As: <br />
-                  <small style={{ color: "#94a3b8", textTransform: "none" }}>(Placeholder Role Selector)</small>
+                  View Map & Incidents As:
                 </div>
                 {RESPONDER_ROLES.map((role) => (
                   <button
@@ -143,12 +172,22 @@ export default function Navbar() {
             <span className="btn-beacon-glow"></span>
           </Link>
 
+          {/* Change password quick shortcut */}
+          <Link
+            to="/change-password"
+            className="btn-logout"
+            style={{ textDecoration: "none", color: "#64748b" }}
+            title="Change Password"
+          >
+            <KeyRound size={16} />
+          </Link>
+
           {/* Log Out Button */}
           <button
             type="button"
             className="btn-logout"
             onClick={handleLogout}
-            title="Log Out (Frontend Prototype)"
+            title="Log Out of Session"
           >
             <LogOut size={16} />
             <span className="hide-on-mobile">Log Out</span>
@@ -206,6 +245,42 @@ export default function Navbar() {
               )}
             </NavLink>
 
+            <NavLink
+              to="/profile"
+              className={({ isActive }) =>
+                `mobile-nav-link ${isActive ? "active" : ""}`
+              }
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <User size={20} />
+              <span>Resident Profile</span>
+            </NavLink>
+
+            <NavLink
+              to="/change-password"
+              className={({ isActive }) =>
+                `mobile-nav-link ${isActive ? "active" : ""}`
+              }
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <KeyRound size={20} />
+              <span>Change Password</span>
+            </NavLink>
+
+            {isAdmin && (
+              <NavLink
+                to="/admin-approvals"
+                className={({ isActive }) =>
+                  `mobile-nav-link ${isActive ? "active" : ""}`
+                }
+                onClick={() => setMobileMenuOpen(false)}
+                style={{ color: "#38bdf8", fontWeight: 700 }}
+              >
+                <ShieldAlert size={20} />
+                <span>Admin Operations Portal</span>
+              </NavLink>
+            )}
+
             {/* Mobile Highlighted Report Button */}
             <div className="mobile-cta-wrapper">
               <Link
@@ -221,7 +296,7 @@ export default function Navbar() {
             {/* Role switch in mobile menu */}
             <div className="mobile-role-section">
               <span className="mobile-role-title">
-                Responder Role Filter: <span className="placeholder-tag">(Placeholder Role Selector)</span>
+                Responder Role Filter:
               </span>
               <div className="mobile-role-buttons">
                 {RESPONDER_ROLES.map((role) => (

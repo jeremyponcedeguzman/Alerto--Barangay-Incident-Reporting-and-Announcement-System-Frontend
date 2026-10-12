@@ -1,0 +1,456 @@
+import React, { createContext, useContext, useState, useEffect } from "react";
+import { logAuditEvent, AUDIT_CATEGORIES } from "../utils/auditLogger";
+
+const AuthContext = createContext(null);
+
+export const SITIO_LIST = [
+  "Sitio Baguingit",
+  "Sitio Binitagan",
+  "Sitio Centro",
+  "Sitio Manga",
+  "Sitio Mape",
+  "Sitio Pag-asa",
+  "Sitio Priority",
+  "Sitio San Joseph",
+  "Sitio San Roque",
+  "MacArthur Highway / Main Road"
+];
+
+const DEFAULT_RESIDENT = {
+  id: "RES-DEMO-01",
+  firstName: "Juan",
+  lastName: "Dela Cruz",
+  email: "resident@gmail.com",
+  contactNumber: "09171234567",
+  sitioAddress: "Sitio Centro",
+  barangay: "Barangay Anupul",
+  municipality: "Bamban",
+  province: "Tarlac",
+  password: "resident123",
+  verificationStatus: "approved",
+  role: "resident",
+  submittedAt: new Date(Date.now() - 86400000).toLocaleString(),
+};
+
+const DEFAULT_ADMIN = {
+  id: "ADMIN-01",
+  firstName: "Barangay",
+  lastName: "Official",
+  email: "admin@anupul.gov",
+  contactNumber: "0917-123-4567",
+  officialPosition: "Barangay Operations Officer",
+  barangay: "Barangay Anupul",
+  municipality: "Bamban",
+  province: "Tarlac",
+  password: "admin123",
+  verificationStatus: "approved",
+  role: "admin",
+  submittedAt: new Date(Date.now() - 172800000).toLocaleString(),
+};
+
+const PENDING_RESIDENT = {
+  id: "RES-DEMO-02",
+  firstName: "Maria",
+  lastName: "Santos",
+  email: "maria.santos@gmail.com",
+  contactNumber: "0918-222-3333",
+  sitioAddress: "Sitio Mape",
+  barangay: "Barangay Anupul",
+  municipality: "Bamban",
+  province: "Tarlac",
+  password: "password123",
+  verificationStatus: "pending",
+  role: "resident",
+  proofOfResidencyName: "barangay_clearance_maria.jpg",
+  submittedAt: new Date(Date.now() - 3600000).toLocaleString(),
+};
+
+const INITIAL_USERS = [DEFAULT_RESIDENT, DEFAULT_ADMIN, PENDING_RESIDENT];
+
+export function AuthProvider({ children }) {
+  const [userDatabase, setUserDatabase] = useState(() => {
+    const saved = localStorage.getItem("alerto_user_database");
+    if (!saved) return INITIAL_USERS;
+    try {
+      const parsed = JSON.parse(saved);
+      return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_USERS;
+    } catch {
+      return INITIAL_USERS;
+    }
+  });
+
+  const [currentUser, setCurrentUser] = useState(() => {
+    const saved = localStorage.getItem("alerto_current_user");
+    return saved ? JSON.parse(saved) : DEFAULT_RESIDENT;
+  });
+
+  // Sync userDatabase to LocalStorage
+  useEffect(() => {
+    localStorage.setItem("alerto_user_database", JSON.stringify(userDatabase));
+  }, [userDatabase]);
+
+  // Sync currentUser to LocalStorage
+  useEffect(() => {
+    if (currentUser) {
+      localStorage.setItem("alerto_current_user", JSON.stringify(currentUser));
+    } else {
+      localStorage.removeItem("alerto_current_user");
+    }
+  }, [currentUser]);
+
+  // Listen for storage changes across different tabs
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key === "alerto_user_database" && e.newValue) {
+        try {
+          const updatedDb = JSON.parse(e.newValue);
+          setUserDatabase(updatedDb);
+
+          if (currentUser) {
+            const matchedUser = updatedDb.find((u) => u.id === currentUser.id);
+            if (matchedUser) {
+              setCurrentUser(matchedUser);
+            }
+          }
+        } catch {
+          // ignore parsing error
+        }
+      }
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, [currentUser]);
+
+  const register = (userData) => {
+    const newResident = {
+      id: "REG-" + Date.now(),
+      ...userData,
+      barangay: "Barangay Anupul",
+      municipality: "Bamban",
+      province: "Tarlac",
+      verificationStatus: "pending",
+      role: "resident",
+      submittedAt: new Date().toLocaleString(),
+    };
+
+    const updated = [...userDatabase, newResident];
+    setUserDatabase(updated);
+    logAuditEvent({
+      category: AUDIT_CATEGORIES.VERIFICATION,
+      action: "New Resident Registration",
+      actor: `${newResident.firstName} ${newResident.lastName}`,
+      target: newResident.id,
+      details: `New residency application submitted for ${newResident.sitioAddress || "Barangay Anupul"}.`,
+      severity: "notice",
+    });
+    return true;
+  };
+
+  const registerAdmin = (adminData) => {
+    const existing = (userDatabase || []).find(
+      (u) => u.email?.toLowerCase().trim() === adminData.email?.toLowerCase().trim()
+    );
+
+    if (existing) {
+      return { success: false, message: "An account with this email already exists." };
+    }
+
+    const newAdmin = {
+      id: "ADMIN-" + Date.now(),
+      firstName: adminData.firstName,
+      lastName: adminData.lastName,
+      email: adminData.email,
+      officialPosition: adminData.officialPosition,
+      contactNumber: adminData.contactNumber || "0917-123-4567",
+      barangay: "Barangay Anupul",
+      municipality: "Bamban",
+      province: "Tarlac",
+      password: adminData.password,
+      role: "admin",
+      verificationStatus: "pending",
+      submittedAt: new Date().toLocaleString(),
+    };
+
+    const updatedDb = [...userDatabase, newAdmin];
+    setUserDatabase(updatedDb);
+    logAuditEvent({
+      category: AUDIT_CATEGORIES.SECURITY,
+      action: "Admin Registration Request",
+      actor: `${newAdmin.firstName} ${newAdmin.lastName}`,
+      target: newAdmin.id,
+      details: `Admin privileges requested for position: ${newAdmin.officialPosition}.`,
+      severity: "warning",
+    });
+
+    return { success: true };
+  };
+
+  const login = (identifier, password) => {
+    const cleanId = (identifier || "").trim().toLowerCase();
+
+    // 1. Super Admin Pass / Bypass
+    if (
+      (cleanId === "admin@anupul.gov" || cleanId === "admin@barangay.gov" || cleanId === "admin") &&
+      password === "admin123"
+    ) {
+      setCurrentUser(DEFAULT_ADMIN);
+      logAuditEvent({
+        category: AUDIT_CATEGORIES.SECURITY,
+        action: "Admin Login Success",
+        actor: "Barangay Official",
+        target: "Admin Portal",
+        details: "Official logged in to the Administrative Operations Center.",
+        severity: "info",
+      });
+      return { success: true, user: DEFAULT_ADMIN };
+    }
+
+    // 2. Demo Resident Pass / Bypass
+    if (
+      (cleanId === "resident@gmail.com" ||
+        cleanId === "09171234567" ||
+        cleanId === "0917-123-4567") &&
+      password === "resident123"
+    ) {
+      setCurrentUser(DEFAULT_RESIDENT);
+      return { success: true, user: DEFAULT_RESIDENT };
+    }
+
+    // 3. Find user in database by email or contact number
+    const user = userDatabase.find(
+      (u) =>
+        (u.email && u.email.toLowerCase().trim() === cleanId) ||
+        (u.contactNumber && u.contactNumber.trim() === identifier.trim())
+    );
+
+    if (!user) {
+      return {
+        success: false,
+        message: "No account found with this email or contact number.",
+      };
+    }
+
+    if (user.password !== password) {
+      return {
+        success: false,
+        message: "Incorrect password. Please try again.",
+      };
+    }
+
+    setCurrentUser(user);
+
+    if (user.verificationStatus === "pending") {
+      return {
+        success: false,
+        isPending: true,
+        message: user.role === "admin"
+          ? "Your official account is currently pending approval by the Head Barangay Official."
+          : "Your residency application is still pending official approval.",
+      };
+    }
+
+    if (user.verificationStatus === "rejected") {
+      return {
+        success: false,
+        isRejected: true,
+        message: "Your verification request was rejected.",
+      };
+    }
+
+    logAuditEvent({
+      category: AUDIT_CATEGORIES.SECURITY,
+      action: "User Login",
+      actor: `${user.firstName} ${user.lastName}`,
+      target: user.id,
+      details: `User signed in successfully. Role: ${user.role}.`,
+      severity: "info",
+    });
+
+    return { success: true, user };
+  };
+
+  const logout = () => {
+    if (currentUser) {
+      logAuditEvent({
+        category: AUDIT_CATEGORIES.SECURITY,
+        action: "User Logout",
+        actor: `${currentUser.firstName} ${currentUser.lastName}`,
+        target: currentUser.id,
+        details: "User logged out of the session.",
+        severity: "info",
+      });
+    }
+    setCurrentUser(null);
+  };
+
+  const approveResident = (userId) => {
+    const targetUser = userDatabase.find((u) => u.id === userId);
+    const updatedDb = userDatabase.map((u) =>
+      u.id === userId ? { ...u, verificationStatus: "approved" } : u
+    );
+    setUserDatabase(updatedDb);
+
+    if (currentUser && currentUser.id === userId) {
+      const approvedUser = { ...currentUser, verificationStatus: "approved" };
+      setCurrentUser(approvedUser);
+    }
+
+    logAuditEvent({
+      category: AUDIT_CATEGORIES.VERIFICATION,
+      action: "Resident Verification Approved",
+      actor: currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : "Admin",
+      target: userId,
+      details: `Approved verification for ${targetUser ? `${targetUser.firstName} ${targetUser.lastName}` : userId}.`,
+      severity: "notice",
+    });
+  };
+
+  const rejectResident = (userId, reason) => {
+    const targetUser = userDatabase.find((u) => u.id === userId);
+    const updatedDb = userDatabase.map((u) =>
+      u.id === userId
+        ? { ...u, verificationStatus: "rejected", rejectionReason: reason }
+        : u
+    );
+    setUserDatabase(updatedDb);
+
+    if (currentUser && currentUser.id === userId) {
+      const rejectedUser = {
+        ...currentUser,
+        verificationStatus: "rejected",
+        rejectionReason: reason,
+      };
+      setCurrentUser(rejectedUser);
+    }
+
+    logAuditEvent({
+      category: AUDIT_CATEGORIES.VERIFICATION,
+      action: "Resident Verification Rejected",
+      actor: currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : "Admin",
+      target: userId,
+      details: `Rejected ${targetUser ? `${targetUser.firstName} ${targetUser.lastName}` : userId}. Reason: ${reason}`,
+      severity: "warning",
+    });
+  };
+
+  const updateUserRole = (userId, newRole) => {
+    const targetUser = userDatabase.find((u) => u.id === userId);
+    const updatedDb = userDatabase.map((u) =>
+      u.id === userId ? { ...u, role: newRole } : u
+    );
+    setUserDatabase(updatedDb);
+
+    if (currentUser && currentUser.id === userId) {
+      setCurrentUser({ ...currentUser, role: newRole });
+    }
+
+    logAuditEvent({
+      category: AUDIT_CATEGORIES.STAFF,
+      action: "User Role Modified",
+      actor: currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : "Admin",
+      target: userId,
+      details: `Role for ${targetUser ? `${targetUser.firstName} ${targetUser.lastName}` : userId} updated to ${newRole.toUpperCase()}.`,
+      severity: "notice",
+    });
+  };
+
+  const deleteUser = (userId) => {
+    const targetUser = userDatabase.find((u) => u.id === userId);
+    const updatedDb = userDatabase.filter((u) => u.id !== userId);
+    setUserDatabase(updatedDb);
+
+    logAuditEvent({
+      category: AUDIT_CATEGORIES.SECURITY,
+      action: "User Account Revoked",
+      actor: currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : "Admin",
+      target: userId,
+      details: `Account for ${targetUser ? `${targetUser.firstName} ${targetUser.lastName}` : userId} was deleted.`,
+      severity: "warning",
+    });
+  };
+
+  const addUser = (userData) => {
+    const newUser = {
+      id: (userData.role === "admin" ? "ADMIN-" : "RES-") + Date.now(),
+      ...userData,
+      barangay: "Barangay Anupul",
+      municipality: "Bamban",
+      province: "Tarlac",
+      verificationStatus: userData.verificationStatus || "approved",
+      submittedAt: new Date().toLocaleString(),
+    };
+    setUserDatabase((prev) => [...prev, newUser]);
+
+    logAuditEvent({
+      category: AUDIT_CATEGORIES.STAFF,
+      action: "User Created Manually",
+      actor: currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : "Admin",
+      target: newUser.id,
+      details: `Added new user ${newUser.firstName} ${newUser.lastName} with role ${newUser.role}.`,
+      severity: "info",
+    });
+    return newUser;
+  };
+
+  const changePassword = (userId, oldPassword, newPassword) => {
+    const user = userDatabase.find((u) => u.id === userId);
+    if (!user) {
+      return { success: false, message: "User account not found." };
+    }
+
+    if (user.password !== oldPassword) {
+      return { success: false, message: "Current password does not match our records." };
+    }
+
+    const updatedDb = userDatabase.map((u) =>
+      u.id === userId ? { ...u, password: newPassword } : u
+    );
+    setUserDatabase(updatedDb);
+
+    if (currentUser && currentUser.id === userId) {
+      setCurrentUser({ ...currentUser, password: newPassword });
+    }
+
+    logAuditEvent({
+      category: AUDIT_CATEGORIES.SECURITY,
+      action: "Password Changed",
+      actor: `${user.firstName} ${user.lastName}`,
+      target: userId,
+      details: "User password updated securely.",
+      severity: "info",
+    });
+
+    return { success: true, message: "Password updated successfully." };
+  };
+
+  return (
+    <AuthContext.Provider
+      value={{
+        currentUser,
+        userDatabase,
+        isLoggedIn: !!currentUser,
+        register,
+        registerAdmin,
+        login,
+        logout,
+        approveResident,
+        rejectResident,
+        updateUserRole,
+        deleteUser,
+        addUser,
+        changePassword,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth() {
+  const ctx = useContext(AuthContext);
+  if (!ctx) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return ctx;
+}

@@ -20,9 +20,11 @@ import {
   CheckCircle2
 } from "lucide-react";
 import { useIncidents, INCIDENT_CATEGORIES } from "../context/IncidentContext";
+import { useAuth } from "../context/AuthContext";
 
 export default function MainPage() {
-  const { incidents, userReports } = useIncidents();
+  const { incidents, userReports, announcements: contextAnnouncements } = useIncidents();
+  const { currentUser } = useAuth ? useAuth() : {};
 
   const activeIncidents = incidents.filter((i) => i.status !== "Resolved");
   const criticalIncidents = incidents.filter(
@@ -84,7 +86,7 @@ export default function MainPage() {
     return [...highVolumeAlerts, ...highSeverityAlerts];
   }, [highVolumeAlerts, highSeverityAlerts]);
 
-  const announcements = [
+  const announcements = (contextAnnouncements && contextAnnouncements.length > 0) ? contextAnnouncements : [
     {
       id: "ANN-001",
       title: "Advisory: Rainfall Warning & Lowland Drainage Clearing Operation",
@@ -97,13 +99,13 @@ export default function MainPage() {
     },
     {
       id: "ANN-002",
-      title: "Barangay [Barangay Name] Emergency Hotline Directory",
+      title: "Barangay Anupul Emergency Hotline Directory",
       date: "October 8, 2026",
       badge: "HOTLINES",
       badgeType: "info",
       author: "Barangay Council",
       summary:
-        "For immediate emergency dispatch: Barangay Operations Center [insert the real number here], Police Station 6 [insert the real number here], BFP Fire Substation [insert the real number here].",
+        "For immediate emergency dispatch: Barangay Operations Center (0917-123-4567), Police Substation ((045) 982-3344), BFP Fire Substation ((045) 982-1122).",
     },
     {
       id: "ANN-003",
@@ -111,7 +113,7 @@ export default function MainPage() {
       date: "October 7, 2026",
       badge: "PUBLIC NOTICE",
       badgeType: "notice",
-      author: "BFP [Barangay Name] Fire Station",
+      author: "BFP Anupul Fire Station",
       summary:
         "Barangay fire volunteers will conduct free LPG hose checks and electrical line inspections across residential areas this coming weekend.",
     },
@@ -230,8 +232,8 @@ export default function MainPage() {
               <ShieldCheck size={14} /> Barangay Incident & Emergency Response
             </span>
             <h1 className="hero-title">
-              Barangay [Barangay Name] <br />
-              <span className="hero-title-accent">Incident Reporting & Map</span>
+              Welcome back, {currentUser?.firstName || "Resident"}! 👋 <br />
+              <span className="hero-title-accent">Barangay Anupul Tracker</span>
             </h1>
             <p className="hero-subtitle">
               Stay informed with real-time incident heatmaps, community emergency broadcasts,
@@ -374,7 +376,7 @@ export default function MainPage() {
               </div>
               <h2 className="section-title">Barangay Announcements</h2>
             </div>
-            <span className="section-sub-info">Barangay [Barangay Name] Operations Center</span>
+            <span className="section-sub-info">Barangay Anupul Operations Center</span>
           </div>
 
           <div className="announcements-list">
@@ -413,22 +415,22 @@ export default function MainPage() {
           <div className="hotlines-grid">
             <div className="hotline-card">
               <div className="hotline-role">Barangay Hall / Tanod</div>
-              <div className="hotline-number">[insert the real number here]</div>
+              <div className="hotline-number">0917-123-4567</div>
               <div className="hotline-desc">Operations Desk (24/7)</div>
             </div>
             <div className="hotline-card">
               <div className="hotline-role">BFP Fire Substation</div>
-              <div className="hotline-number">[insert the real number here]</div>
+              <div className="hotline-number">(045) 982-1122</div>
               <div className="hotline-desc">Fire & Rescue Response</div>
             </div>
             <div className="hotline-card">
               <div className="hotline-role">PNP Police Substation</div>
-              <div className="hotline-number">[insert the real number here]</div>
+              <div className="hotline-number">(045) 982-3344</div>
               <div className="hotline-desc">Law Enforcement & Security</div>
             </div>
             <div className="hotline-card">
               <div className="hotline-role">Barangay Ambulance / BHERT</div>
-              <div className="hotline-number">[insert the real number here]</div>
+              <div className="hotline-number">0918-987-6543</div>
               <div className="hotline-desc">Medical & Emergency Transport</div>
             </div>
           </div>

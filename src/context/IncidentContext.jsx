@@ -5,6 +5,7 @@ import {
   getRelativeTime,
   formatDynamicTimestamp,
 } from "../utils/timeUtils";
+import { logAuditEvent, AUDIT_CATEGORIES } from "../utils/auditLogger";
 
 const IncidentContext = createContext(null);
 
@@ -15,7 +16,7 @@ export const INCIDENT_CATEGORIES = {
     iconName: "Flame",
     color: "#ef4444",
     bgLight: "#fee2e2",
-    responder: "BFP (Bureau of Fire Protection) ????",
+    responder: "BFP (Bureau of Fire Protection) 🚒",
   },
   flood: {
     id: "flood",
@@ -23,7 +24,7 @@ export const INCIDENT_CATEGORIES = {
     iconName: "Waves",
     color: "#0284c7",
     bgLight: "#e0f2fe",
-    responder: "DRRMO (Disaster Risk Reduction) ????",
+    responder: "DRRMO (Disaster Risk Reduction) 🌊",
   },
   medical: {
     id: "medical",
@@ -31,7 +32,7 @@ export const INCIDENT_CATEGORIES = {
     iconName: "HeartPulse",
     color: "#10b981",
     bgLight: "#d1fae5",
-    responder: "BHERT (Barangay Health / Ambulance) ????",
+    responder: "BHERT (Barangay Health / Ambulance) 🚑",
   },
   police: {
     id: "police",
@@ -39,7 +40,7 @@ export const INCIDENT_CATEGORIES = {
     iconName: "ShieldAlert",
     color: "#8b5cf6",
     bgLight: "#ede9fe",
-    responder: "Barangay Tanod & PNP ????",
+    responder: "Barangay Tanod & PNP 👮",
   },
   accident: {
     id: "accident",
@@ -47,7 +48,7 @@ export const INCIDENT_CATEGORIES = {
     iconName: "CarAlert",
     color: "#f59e0b",
     bgLight: "#fef3c7",
-    responder: "Traffic Enforcement & Tanod ????",
+    responder: "Traffic Enforcement & Tanod ⚠️",
   },
   hazard: {
     id: "hazard",
@@ -55,7 +56,7 @@ export const INCIDENT_CATEGORIES = {
     iconName: "ZapOff",
     color: "#6b7280",
     bgLight: "#f3f4f6",
-    responder: "Barangay Engineering & Meralco ????",
+    responder: "Barangay Engineering & Meralco ⚡",
   },
 };
 
@@ -67,19 +68,19 @@ export const RESPONDER_ROLES = [
   { id: "drrmo", label: "Disaster Risk / DRRMO", categories: ["flood", "hazard"] },
 ];
 
-// Current logged in user (un-editable, verified resident identity)
+// Current logged in user (verified resident identity)
 export const CURRENT_USER = {
-  name: "[Logged-In Resident Full Name]",
-  phone: "[insert the real number here]",
-  residentId: "BRGY-[BARANGAYNAME]-2026-0042",
-  address: "[Street Address], Barangay [Barangay Name]",
+  name: "Juan Dela Cruz",
+  phone: "0917-123-4567",
+  residentId: "BRGY-ANUPUL-2026-0042",
+  address: "Sitio Centro, Barangay Anupul, Bamban, Tarlac",
 };
 
-// Default Barangay Poblacion / [Barangay Name] Center Coordinates
+// Default Barangay Poblacion / Anupul Center Coordinates
 export const BARANGAY_CENTER = {
   lat: 14.5605,
   lng: 121.0182,
-  name: "Barangay [Barangay Name] Center",
+  name: "Barangay Anupul Operations Center",
 };
 
 // Initial realistic incident data with dynamic createdAt timestamps
@@ -97,7 +98,7 @@ const INITIAL_INCIDENTS = [
     isUserReport: true,
     createdAt: new Date(Date.now() - 12 * 60 * 1000).toISOString(),
     description: "Thick black smoke coming from a two-story residential house. BFP truck en route.",
-    responder: "BFP Firefighters ????",
+    responder: "BFP Firefighters 🚒",
     votes: 8,
   },
   {
@@ -113,7 +114,7 @@ const INITIAL_INCIDENTS = [
     isUserReport: false,
     createdAt: new Date(Date.now() - 24 * 60 * 1000).toISOString(),
     description: "Sparks flying from overhead transformer near convenience store.",
-    responder: "BFP & Meralco ????",
+    responder: "BFP & Meralco ⚡",
     votes: 5,
   },
   {
@@ -129,10 +130,9 @@ const INITIAL_INCIDENTS = [
     isUserReport: false,
     createdAt: new Date(Date.now() - 38 * 60 * 1000).toISOString(),
     description: "Illegal burning of refuse spreading near dry wooden perimeter fence.",
-    responder: "BFP & Tanod ????",
+    responder: "BFP & Tanod 🚒",
     votes: 3,
   },
-  // Flood cluster in lowland riverside sector
   {
     id: "INC-2026-004",
     title: "Knee-Deep Gutter Flood / Clogged Drainage",
@@ -142,11 +142,11 @@ const INITIAL_INCIDENTS = [
     locationName: "St. Paul St. lowland corner",
     lat: 14.5575,
     lng: 121.0205,
-    reportedBy: "[Logged-In Resident Full Name]",
+    reportedBy: "Juan Dela Cruz",
     isUserReport: true,
     createdAt: new Date(Date.now() - 18 * 60 * 1000).toISOString(),
     description: "Water has reached knee level, impassable to light vehicles. Trash blocking drainage grates.",
-    responder: "DRRMO & Engineering ????",
+    responder: "DRRMO & Engineering 🌊",
     votes: 14,
   },
   {
@@ -162,7 +162,7 @@ const INITIAL_INCIDENTS = [
     isUserReport: false,
     createdAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
     description: "Creek water level warning: reached Orange Alert threshold. Evacuation standby.",
-    responder: "DRRMO Rescue Unit ????",
+    responder: "DRRMO Rescue Unit 🌊",
     votes: 21,
   },
   {
@@ -178,7 +178,7 @@ const INITIAL_INCIDENTS = [
     isUserReport: false,
     createdAt: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
     description: "Two elderly residents unable to exit home due to 2-foot floodwater.",
-    responder: "DRRMO & Barangay Ambulance ????",
+    responder: "DRRMO & Barangay Ambulance 🚑",
     votes: 9,
   },
   {
@@ -194,10 +194,9 @@ const INITIAL_INCIDENTS = [
     isUserReport: false,
     createdAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
     description: "Water bubbling up through manhole covers during heavy rain shower.",
-    responder: "Engineering Team ????",
+    responder: "Engineering Team 🛠️",
     votes: 4,
   },
-  // Medical
   {
     id: "INC-2026-008",
     title: "Elderly Citizen Severe Breathing Distress",
@@ -211,7 +210,7 @@ const INITIAL_INCIDENTS = [
     isUserReport: false,
     createdAt: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
     description: "72yo patient experiencing shortness of breath. Oxygen tank requested.",
-    responder: "BHERT & Barangay Ambulance ????",
+    responder: "BHERT & Barangay Ambulance 🚑",
     votes: 2,
   },
   {
@@ -227,10 +226,9 @@ const INITIAL_INCIDENTS = [
     isUserReport: false,
     createdAt: new Date(Date.now() - 120 * 60 * 1000).toISOString(),
     description: "Rider slipped on wet road markings. Minor lacerations on knees, treated on site.",
-    responder: "BHERT Medic ????",
+    responder: "BHERT Medic 🚑",
     votes: 6,
   },
-  // Police / Tanod (Crime)
   {
     id: "INC-2026-010",
     title: "Store Burglary & Shoplifting",
@@ -240,14 +238,13 @@ const INITIAL_INCIDENTS = [
     locationName: "Tindalo St. Convenience Store",
     lat: 14.5651,
     lng: 121.0198,
-    reportedBy: "[Logged-In Resident Full Name]",
+    reportedBy: "Juan Dela Cruz",
     isUserReport: true,
     createdAt: new Date(Date.now() - 50 * 60 * 1000).toISOString(),
     description: "Commercial store break-in attempt and property theft reported. Tanod / Police investigation requested.",
-    responder: "Barangay Tanod Patrol ????",
+    responder: "Barangay Tanod Patrol 👮",
     votes: 7,
   },
-  // Vehicular Accident
   {
     id: "INC-2026-011",
     title: "Two-Vehicle Collision Blocking Intersection",
@@ -261,10 +258,9 @@ const INITIAL_INCIDENTS = [
     isUserReport: false,
     createdAt: new Date(Date.now() - 28 * 60 * 1000).toISOString(),
     description: "Sedan and delivery van sideswiped. Road partially blocked, traffic backing up.",
-    responder: "Traffic Tanod & Tow Unit ????",
+    responder: "Traffic Tanod & Tow Unit ⚠️",
     votes: 11,
   },
-  // Infrastructure / Power Hazard
   {
     id: "INC-2026-012",
     title: "Downed Acacia Tree Branch Leaning on Cables",
@@ -278,13 +274,74 @@ const INITIAL_INCIDENTS = [
     isUserReport: false,
     createdAt: new Date(Date.now() - 65 * 60 * 1000).toISOString(),
     description: "Large tree limb snapped during gusty wind, resting dangerously on telecomm wires.",
-    responder: "Barangay Maintenance ????",
+    responder: "Barangay Maintenance ⚡",
     votes: 5,
   },
 ];
 
+const INITIAL_ANNOUNCEMENTS = [
+  {
+    id: "ANN-001",
+    title: "Advisory: Rainfall Warning & Lowland Drainage Clearing Operation",
+    date: "October 9, 2026 • 03:00 AM",
+    badge: "URGENT ADVISORY",
+    badgeType: "warning",
+    author: "Barangay DRRMO & Engineering Unit",
+    summary: "Residents in low-lying riverside areas are advised to monitor creek water levels. Tanod and maintenance crews have deployed water pumps to assist drainage backflow.",
+  },
+  {
+    id: "ANN-002",
+    title: "Barangay Emergency Hotline Directory",
+    date: "October 8, 2026",
+    badge: "HOTLINES",
+    badgeType: "info",
+    author: "Barangay Council",
+    summary: "For immediate emergency dispatch: Barangay Operations Center, Police Substation, BFP Fire Substation, Ambulance.",
+  },
+  {
+    id: "ANN-003",
+    title: "Community Fire Prevention & Gas Tank Inspection Drive",
+    date: "October 7, 2026",
+    badge: "PUBLIC NOTICE",
+    badgeType: "notice",
+    author: "BFP Fire Station",
+    summary: "Barangay fire volunteers will conduct free LPG hose checks and electrical line inspections across residential areas this coming weekend.",
+  },
+];
+
 export function IncidentProvider({ children }) {
-  const [incidents, setIncidents] = useState(INITIAL_INCIDENTS);
+  // Load from local storage or fallback to initial data
+  const [incidents, setIncidents] = useState(() => {
+    const saved = localStorage.getItem("barangay_incidents");
+    if (!saved) return INITIAL_INCIDENTS;
+    try {
+      const parsed = JSON.parse(saved);
+      return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_INCIDENTS;
+    } catch {
+      return INITIAL_INCIDENTS;
+    }
+  });
+
+  const [announcements, setAnnouncements] = useState(() => {
+    const saved = localStorage.getItem("barangay_announcements");
+    if (!saved) return INITIAL_ANNOUNCEMENTS;
+    try {
+      const parsed = JSON.parse(saved);
+      return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_ANNOUNCEMENTS;
+    } catch {
+      return INITIAL_ANNOUNCEMENTS;
+    }
+  });
+
+  // Save to local storage on changes
+  useEffect(() => {
+    localStorage.setItem("barangay_incidents", JSON.stringify(incidents));
+  }, [incidents]);
+
+  useEffect(() => {
+    localStorage.setItem("barangay_announcements", JSON.stringify(announcements));
+  }, [announcements]);
+
   const [now, setNow] = useState(Date.now());
   const [activeCategory, setActiveCategory] = useState("all");
   const [activeRole, setActiveRole] = useState("all");
@@ -312,8 +369,8 @@ export function IncidentProvider({ children }) {
         exactTime: timeInfo.exact,
         timeOnly: formatTimeOnly(createdDate),
         relativeTime: timeInfo.relative,
-        timestamp: timeInfo.short, // e.g. "4:32 AM • 12m ago"
-        fullTimestamp: timeInfo.full, // e.g. "Oct 9, 2026, 4:32 AM (12m ago)"
+        timestamp: timeInfo.short,
+        fullTimestamp: timeInfo.full,
       };
     });
   }, [incidents, now]);
@@ -325,12 +382,22 @@ export function IncidentProvider({ children }) {
       id: `INC-2026-${String(incidents.length + 1).padStart(3, "0")}`,
       createdAt: new Date().toISOString(),
       reportedBy: CURRENT_USER.name,
-      status: "Pending",
+      status: "Pending Review",
       votes: 1,
       isUserReport: true,
     };
     setIncidents((prev) => [formatted, ...prev]);
     setFocusedIncidentId(formatted.id);
+
+    logAuditEvent({
+      category: AUDIT_CATEGORIES.DISPATCH,
+      action: "New Incident Reported",
+      actor: CURRENT_USER.name,
+      target: formatted.id,
+      details: `Reported: ${formatted.title} at ${formatted.locationName}. Responder assigned: ${formatted.responder || "Unassigned"}.`,
+      severity: formatted.severity === "critical" ? "critical" : "warning",
+    });
+
     return formatted;
   };
 
@@ -339,6 +406,58 @@ export function IncidentProvider({ children }) {
     setIncidents((prev) =>
       prev.map((inc) => (inc.id === id ? { ...inc, status: newStatus } : inc))
     );
+
+    logAuditEvent({
+      category: AUDIT_CATEGORIES.DISPATCH,
+      action: "Incident Status Changed",
+      actor: "Operations Desk",
+      target: id,
+      details: `Status updated to '${newStatus}'.`,
+      severity: newStatus === "Resolved" ? "info" : "notice",
+    });
+  };
+
+  const updateIncidentDetails = (id, newStatus, newResponder) => {
+    setIncidents((prev) =>
+      prev.map((inc) =>
+        String(inc.id) === String(id)
+          ? { ...inc, status: newStatus, responder: newResponder }
+          : inc
+      )
+    );
+
+    logAuditEvent({
+      category: AUDIT_CATEGORIES.DISPATCH,
+      action: "Incident Dispatch Updated",
+      actor: "Operations Desk",
+      target: String(id),
+      details: `Updated Incident #${id}: Status -> ${newStatus}, Assigned -> ${newResponder}.`,
+      severity: "notice",
+    });
+  };
+
+  const addAnnouncement = (title, message, priority) => {
+    const newAnn = {
+      id: `ANN-${Date.now()}`,
+      title,
+      summary: message,
+      badge: priority === "Emergency" ? "EMERGENCY ALERT" : priority === "Weather Advisory" ? "WEATHER ADVISORY" : "GENERAL INFO",
+      badgeType: priority === "Emergency" ? "warning" : priority === "Weather Advisory" ? "notice" : "info",
+      date: new Date().toLocaleString(),
+      author: "Admin Officer",
+    };
+    setAnnouncements((prev) => [newAnn, ...prev]);
+
+    logAuditEvent({
+      category: AUDIT_CATEGORIES.BROADCAST,
+      action: "Official Broadcast Issued",
+      actor: "Admin Officer",
+      target: newAnn.id,
+      details: `Issued announcement: "${title}" (Priority: ${priority}).`,
+      severity: priority === "Emergency" ? "critical" : "notice",
+    });
+
+    return newAnn;
   };
 
   // Filtered incidents based on activeCategory and activeRole (from enrichedIncidents)
@@ -388,9 +507,6 @@ export function IncidentProvider({ children }) {
   }, [categoryCounts, clusterThreshold]);
 
   // Determine if heatmap should be active
-  // If viewMode === 'heatmap' or 'hybrid', heatmap is always on
-  // If viewMode === 'auto', heatmap only activates for filtered category if it reaches clusterThreshold,
-  // or if viewing 'all', when at least one category is clustered
   const isHeatmapActive = useMemo(() => {
     if (viewMode === "heatmap" || viewMode === "hybrid") return true;
     if (viewMode === "pins") return false;
@@ -432,6 +548,9 @@ export function IncidentProvider({ children }) {
         isHeatmapActive,
         addIncident,
         updateIncidentStatus,
+        updateIncidentDetails,
+        announcements,
+        addAnnouncement,
       }}
     >
       {children}

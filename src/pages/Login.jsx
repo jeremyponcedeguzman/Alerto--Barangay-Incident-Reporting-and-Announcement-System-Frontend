@@ -10,6 +10,7 @@ export default function Login() {
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [authError, setAuthError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [loginData, setLoginData] = useState({
     identifier: "",
@@ -41,7 +42,7 @@ export default function Login() {
     "Sitio Priority",
     "Sitio San Joseph",
     "Sitio San Roque",
-    "MacArthur Highway / Main Road"
+    "MacArthur Highway / Main Road",
   ];
 
   const handleSignupInputChange = (field, value) => {
@@ -85,7 +86,7 @@ export default function Login() {
     }
   };
 
-  const handleSignupSubmit = (e) => {
+  const handleSignupSubmit = async (e) => {
     e.preventDefault();
     setAuthError("");
     const newErrors = {};
@@ -130,11 +131,53 @@ export default function Login() {
 
     setErrors(newErrors);
 
-    if (Object.keys(newErrors).length === 0 && register) {
-      register(signupData);
-      alert("Registration submitted! Please wait for Barangay Anupul Officials to approve your account before logging in.");
-      setIsLogin(true);
-      setLoginData({ identifier: signupData.email, password: "", rememberMe: false });
+    if (Object.keys(newErrors).length === 0) {
+      setIsSubmitting(true);
+      try {
+        // Map frontend fields directly to backend Mongoose Resident Schema
+        const residentPayload = {
+          fullName: `${signupData.firstName.trim()} ${signupData.lastName.trim()}`,
+          contactNumber: signupData.contactNumber.trim(),
+          purok: signupData.sitioAddress,
+          address: `${signupData.sitioAddress}, Barangay Anupul, Bamban, Tarlac`,
+        };
+
+        // Post directly to Express backend
+        const response = await fetch("http://localhost:5000/api/residents/register", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(residentPayload),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          setAuthError(data.message || "Failed to register resident in database.");
+          setIsSubmitting(false);
+          return;
+        }
+
+        // Sync local context state with the generated MongoDB _id
+        if (register) {
+          await register({
+            ...signupData,
+            _id: data.data?._id,
+            sitio: signupData.sitioAddress,
+            purok: signupData.sitioAddress,
+          });
+        }
+
+        alert("Registration submitted! Please wait for Barangay Anupul Officials to approve your account before logging in.");
+        setIsLogin(true);
+        setLoginData({ identifier: signupData.email, password: "", rememberMe: false });
+      } catch (err) {
+        console.error("Network error during registration:", err);
+        setAuthError("Could not reach backend server at http://localhost:5000. Please ensure the backend is running.");
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -175,7 +218,7 @@ export default function Login() {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
         </svg>
         <div style={{ fontSize: "0.82rem", lineHeight: "1.4" }}>
-          <strong>Notice:</strong> ALERT0 is an emergency accident reporting system currently exclusive to verified residents of <strong>Barangay Anupul, Bamban, Tarlac</strong>[cite: 1, 3].
+          <strong>Notice:</strong> ALERT0 is an emergency accident reporting system currently exclusive to verified residents of <strong>Barangay Anupul, Bamban, Tarlac</strong>[cite: 8].
         </div>
       </div>
 
@@ -196,7 +239,7 @@ export default function Login() {
             </div>
           </div>
           <p style={{ fontSize: "0.72rem", color: "#fee2e2", textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.05em", marginTop: "0.25rem" }}>
-            Barangay Anupul • Bamban, Tarlac[cite: 3]
+            Barangay Anupul • Bamban, Tarlac[cite: 8]
           </p>
         </div>
 
@@ -300,7 +343,7 @@ export default function Login() {
                     style={{ marginTop: "0.2rem" }}
                   />
                   <span>
-                    I explicitly confirm that I am a bona fide resident of <strong>Barangay Anupul, Bamban, Tarlac</strong>[cite: 1, 3].
+                    I explicitly confirm that I am a bona fide resident of <strong>Barangay Anupul, Bamban, Tarlac</strong>[cite: 8].
                   </span>
                 </label>
                 {errors.isAnupulResident && <p style={{ fontSize: "0.75rem", color: "var(--emergency)", marginTop: "0.3rem", fontWeight: 600 }}>{errors.isAnupulResident}</p>}
@@ -506,8 +549,13 @@ export default function Login() {
                 )}
               </div>
 
-              <button type="submit" className="btn-hero-primary-report" style={{ width: "100%", justifyContent: "center", marginTop: "0.5rem" }}>
-                Register & Request Verification
+              <button 
+                type="submit" 
+                disabled={isSubmitting}
+                className="btn-hero-primary-report" 
+                style={{ width: "100%", justifyContent: "center", marginTop: "0.5rem", opacity: isSubmitting ? 0.7 : 1 }}
+              >
+                {isSubmitting ? "Registering..." : "Register & Request Verification"}
               </button>
             </form>
           )}

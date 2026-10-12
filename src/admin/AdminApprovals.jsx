@@ -4,6 +4,8 @@ import { useAuth } from "../context/AuthContext";
 import { useIncidents } from "../context/IncidentContext";
 import AdminNavbar from "./AdminNavbar";
 import Announcements from "../pages/Announcements";
+import IncidentMap from "../pages/IncidentMap"; // Added Map Import
+import DutyRoster from "../pages/DutyRoster"; // <-- Added Duty Roster Import
 
 export default function AdminApprovals() {
   const auth = useAuth() || {};
@@ -89,7 +91,17 @@ export default function AdminApprovals() {
     <div style={{ minHeight: "100vh", backgroundColor: "#f8fafc" }}>
       <AdminNavbar activeTab={adminMainTab} setActiveTab={setAdminMainTab} />
 
-      <main style={{ maxWidth: "1100px", margin: "1.5rem auto", padding: "0 1rem", fontFamily: "sans-serif" }}>
+      {/* 
+        We change the max-width dynamically. 
+        If the Map tab is open, we let it use the full width so the interactive map looks great.
+        Otherwise, we use the standard 1100px width.
+      */}
+      <main style={{ 
+        maxWidth: adminMainTab === "map" ? "100%" : "1100px", 
+        margin: "1.5rem auto", 
+        padding: "0 1rem", 
+        fontFamily: "sans-serif" 
+      }}>
         
         {/* RESIDENT & ADMIN APPROVALS VIEW */}
         {adminMainTab === "approvals" && (
@@ -280,7 +292,6 @@ export default function AdminApprovals() {
                       )}
                     </div>
                     
-                    {/* ADDED THE DYNAMIC DISPATCH BUTTON HERE */}
                     <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px dashed #cbd5e1", textAlign: "right" }}>
                        <Link 
                          to={`/edit-incident/${incident.id || index}`} 
@@ -306,31 +317,17 @@ export default function AdminApprovals() {
           </div>
         )}
 
-        {/* INCIDENT MAP LOCATION VIEW */}
+        {/* INCIDENT MAP LOCATION VIEW - REPLACED WITH LIVE LEAFLET MAP */}
         {adminMainTab === "map" && (
-          <div>
-            <div style={{ backgroundColor: "#0f172a", color: "white", padding: "1.25rem 1.5rem", borderRadius: "12px", marginBottom: "1.25rem" }}>
-              <h2 style={{ margin: 0, fontSize: "1.4rem" }}>📍 Incident Map Overview • Barangay Anupul</h2>
-              <p style={{ margin: "0.25rem 0 0", fontSize: "0.82rem", color: "#94a3b8" }}>Geographic distribution of reported emergency incidents.</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <div style={{ backgroundColor: "#0f172a", color: "white", padding: "1.25rem 1.5rem", borderRadius: "12px" }}>
+              <h2 style={{ margin: 0, fontSize: "1.4rem" }}>📍 Live Incident Command Map</h2>
+              <p style={{ margin: "0.25rem 0 0", fontSize: "0.82rem", color: "#94a3b8" }}>Real-time geographic distribution and heatmaps of reported emergencies.</p>
             </div>
-
-            <div style={{ backgroundColor: "white", borderRadius: "12px", border: "1px solid #e2e8f0", padding: "1.5rem", textAlign: "center" }}>
-              <div style={{ height: "400px", backgroundColor: "#e2e8f0", borderRadius: "8px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-                <span style={{ fontSize: "3rem", marginBottom: "0.5rem" }}>🗺️</span>
-                <h3 style={{ margin: 0, color: "#1e293b" }}>Barangay Anupul Emergency Map</h3>
-                <p style={{ fontSize: "0.85rem", color: "#64748b", maxWidth: "400px", marginTop: "0.35rem" }}>Displaying active report markers across Sitio Baguingit, Sitio Centro, Sitio Pag-asa, and MacArthur Highway.</p>
-
-                <div style={{ marginTop: "1rem", display: "flex", gap: "0.5rem", flexWrap: "wrap", justifyContent: "center" }}>
-                  {SITIO_LIST.map((sitio) => {
-                    const count = incidents.filter(i => (i.location || "").includes(sitio) || (i.sitio || "").includes(sitio)).length;
-                    return (
-                      <span key={sitio} style={{ backgroundColor: count > 0 ? "#ef4444" : "#cbd5e1", color: "white", fontSize: "0.72rem", padding: "0.25rem 0.6rem", borderRadius: "9999px", fontWeight: 700 }}>
-                        📍 {sitio} ({count})
-                      </span>
-                    );
-                  })}
-                </div>
-              </div>
+            
+            {/* FIX: Removed the restrictive 'calc' height and added a generous minHeight so it never cuts off */}
+            <div style={{ minHeight: "850px", backgroundColor: "white", borderRadius: "12px", border: "1px solid #e2e8f0", overflow: "hidden" }}>
+              <IncidentMap />
             </div>
           </div>
         )}
@@ -338,6 +335,11 @@ export default function AdminApprovals() {
         {/* 2. THE NEW ANNOUNCEMENTS DASHBOARD VIEW */}
         {adminMainTab === "announcements" && (
           <Announcements />
+        )}
+
+        {/* 3. ADDED THE DUTY ROSTER VIEW */}
+        {adminMainTab === "roster" && (
+          <DutyRoster />
         )}
 
       </main>

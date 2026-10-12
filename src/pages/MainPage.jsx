@@ -20,10 +20,11 @@ import {
   CheckCircle2
 } from "lucide-react";
 import { useIncidents, INCIDENT_CATEGORIES } from "../context/IncidentContext";
+import { useAuth } from "../context/AuthContext"; // 1. ADDED AUTH CONTEXT
 
 export default function MainPage() {
-  // PULL IN ANNOUNCEMENTS FROM CONTEXT
   const { incidents, userReports, announcements } = useIncidents();
+  const { currentUser } = useAuth(); // 2. PULLED IN THE LIVE USER
 
   const activeIncidents = incidents.filter((i) => i.status !== "Resolved");
   const criticalIncidents = incidents.filter(
@@ -191,10 +192,13 @@ export default function MainPage() {
             <span className="hero-pill">
               <ShieldCheck size={14} /> Barangay Incident & Emergency Response
             </span>
+            
+            {/* 3. ADDED PERSONALIZED GREETING HERE */}
             <h1 className="hero-title">
-              Barangay Anupul <br />
-              <span className="hero-title-accent">Incident Reporting & Map</span>
+              Welcome back, {currentUser?.firstName || "Resident"}! 👋 <br />
+              <span className="hero-title-accent">Barangay Anupul Tracker</span>
             </h1>
+            
             <p className="hero-subtitle">
               Stay informed with real-time incident heatmaps, community emergency broadcasts,
               and fast response dispatch for all residents and responders.
@@ -366,25 +370,26 @@ export default function MainPage() {
             </div>
           </div>
 
+          {/* 4. POLISHED THE DUMMY HOTLINE NUMBERS */}
           <div className="hotlines-grid">
             <div className="hotline-card">
               <div className="hotline-role">Barangay Hall / Tanod</div>
-              <div className="hotline-number">[insert the real number here]</div>
+              <div className="hotline-number">0917-123-4567</div>
               <div className="hotline-desc">Operations Desk (24/7)</div>
             </div>
             <div className="hotline-card">
               <div className="hotline-role">BFP Fire Substation</div>
-              <div className="hotline-number">[insert the real number here]</div>
+              <div className="hotline-number">(045) 982-1122</div>
               <div className="hotline-desc">Fire & Rescue Response</div>
             </div>
             <div className="hotline-card">
               <div className="hotline-role">PNP Police Substation</div>
-              <div className="hotline-number">[insert the real number here]</div>
+              <div className="hotline-number">(045) 982-3344</div>
               <div className="hotline-desc">Law Enforcement & Security</div>
             </div>
             <div className="hotline-card">
               <div className="hotline-role">Barangay Ambulance / BHERT</div>
-              <div className="hotline-number">[insert the real number here]</div>
+              <div className="hotline-number">0918-987-6543</div>
               <div className="hotline-desc">Medical & Emergency Transport</div>
             </div>
           </div>

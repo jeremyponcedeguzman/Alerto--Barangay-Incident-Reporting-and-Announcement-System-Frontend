@@ -1,8 +1,15 @@
 import React from "react";
+import { useNavigate } from "react-router-dom"; // Added for routing
 import { useAuth } from "../context/AuthContext";
 
 export default function PendingVerification() {
   const { currentUser, logout } = useAuth();
+  const navigate = useNavigate(); // Added so we can send them to the login page
+
+  const handleLogout = () => {
+    if (logout) logout();
+    navigate("/login"); // Instantly sends them back to the login screen
+  };
 
   return (
     <div className="standard-page-container" style={{ maxWidth: "680px", margin: "2rem auto", fontFamily: "sans-serif" }}>
@@ -66,7 +73,7 @@ export default function PendingVerification() {
 
         <button
           type="button"
-          onClick={logout}
+          onClick={handleLogout} // Revised to use our new routing function
           style={{ padding: "0.65rem 1.25rem", backgroundColor: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: "8px", fontWeight: 700, cursor: "pointer", color: "#334155" }}
         >
           Log Out & Return to Login

@@ -11,6 +11,7 @@ import MyReports from "./pages/MyReports";
 import ReportIncident from "./pages/ReportIncident";
 import Profile from "./pages/Profile";
 import Login from "./pages/Login";
+import DutyRoster from "./pages/DutyRoster";
 import PendingVerification from "./pages/PendingVerification";
 import EditIncident from "./pages/EditIncident"; // 1. ADDED IMPORT HERE
 
@@ -103,6 +104,7 @@ function AppContent() {
               </ProtectedResidentRoute>
             }
           />
+          
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/login" replace />} />

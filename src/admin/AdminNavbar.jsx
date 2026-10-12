@@ -68,7 +68,7 @@ export default function AdminNavbar({ activeTab, setActiveTab }) {
           </div>
         </div>
 
-        <nav style={{ display: "flex", gap: "0.5rem", background: "#1e293b", padding: "0.25rem", borderRadius: "10px" }}>
+        <nav style={{ display: "flex", gap: "0.5rem", background: "#1e293b", padding: "0.25rem", borderRadius: "10px", overflowX: "auto" }}>
           <button
             type="button"
             onClick={() => setActiveTab("approvals")}
@@ -120,7 +120,6 @@ export default function AdminNavbar({ activeTab, setActiveTab }) {
             📍 Incident Map Location
           </button>
 
-          {/* New Announcements Button added here */}
           <button
             type="button"
             onClick={() => setActiveTab("announcements")}
@@ -136,6 +135,25 @@ export default function AdminNavbar({ activeTab, setActiveTab }) {
             }}
           >
             📢 Announcements
+          </button>
+
+          {/* ADDED: Duty Roster Tab */}
+          <button
+            type="button"
+            onClick={() => setActiveTab("roster")}
+            style={{
+              padding: "0.55rem 1rem",
+              borderRadius: "8px",
+              border: "none",
+              fontSize: "0.82rem",
+              fontWeight: 700,
+              cursor: "pointer",
+              backgroundColor: activeTab === "roster" ? "#ef4444" : "transparent",
+              color: activeTab === "roster" ? "white" : "#cbd5e1",
+              whiteSpace: "nowrap"
+            }}
+          >
+            📋 Duty Roster
           </button>
         </nav>
 

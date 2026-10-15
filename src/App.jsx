@@ -1,6 +1,6 @@
 import React from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
-import { IncidentProvider } from "./context/IncidentContext";
+import { IncidentProvider, useIncidents } from "./context/IncidentContext";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import Navbar from "./components/Navbar";
 
@@ -44,6 +44,7 @@ function ProtectedResidentRoute({ children }) {
 
 function AppContent() {
   const location = useLocation();
+  const { isBackendOnline, isMongoAvailable } = useIncidents ? useIncidents() : {};
 
   // Hide resident navbar on auth pages and dedicated admin desks
   const hideNavbar =
@@ -56,9 +57,34 @@ function AppContent() {
     location.pathname === "/add-staff" ||
     location.pathname === "/audit-logs";
 
+  const isAuthPage =
+    location.pathname === "/login" ||
+    location.pathname === "/admin/login" ||
+    location.pathname === "/admin/signup";
+
   return (
     <div className="app-container">
       {!hideNavbar && <Navbar />}
+      {isAuthPage && (!isBackendOnline || !isMongoAvailable) && (
+        <div
+          style={{
+            backgroundColor: "#fef3c7",
+            borderBottom: "1px solid #fde68a",
+            color: "#92400e",
+            padding: "0.5rem 1rem",
+            fontSize: "0.82rem",
+            fontWeight: 600,
+            textAlign: "center",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "6px",
+          }}
+        >
+          <span>⚠️</span>
+          <span>MongoDB server is currently unavailable. Using local demo mode (default: admin@anupul.gov / admin123).</span>
+        </div>
+      )}
       <main className="app-content-body">
         <Routes>
           {/* Public Auth Routes */}

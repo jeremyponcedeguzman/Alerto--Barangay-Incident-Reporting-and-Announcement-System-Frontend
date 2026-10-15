@@ -61,6 +61,7 @@ export default function IncidentMap() {
     isHeatmapActive,
     clusterThreshold,
     updateIncidentStatus,
+    canUserEditIncident,
   } = useIncidents();
 
   const mapContainerRef = useRef(null);
@@ -281,6 +282,8 @@ export default function IncidentMap() {
         const catInfo =
           INCIDENT_CATEGORIES[incident.category] || INCIDENT_CATEGORIES.hazard;
 
+        const canEdit = canUserEditIncident ? canUserEditIncident(incident) : false;
+
         const popupContent = document.createElement("div");
         popupContent.className = "incident-popup-card";
         popupContent.innerHTML = `
@@ -310,9 +313,13 @@ export default function IncidentMap() {
             <button class="popup-btn-select" id="btn-popup-select-${incident.id}" style="flex: 1;">
               Focus Details
             </button>
-            <button class="popup-btn-update" id="btn-popup-update-${incident.id}" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 4px; background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; border-radius: 6px; padding: 6px 10px; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.15s ease;">
-              ✏️ Update Info
-            </button>
+            ${
+              canEdit
+                ? `<button class="popup-btn-update" id="btn-popup-update-${incident.id}" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 4px; background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; border-radius: 6px; padding: 6px 10px; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.15s ease;">
+                     ✏️ Update Info
+                   </button>`
+                : ""
+            }
           </div>
         `;
 
@@ -323,11 +330,13 @@ export default function IncidentMap() {
             setSidebarOpen(true);
           });
 
-        popupContent
-          .querySelector(`#btn-popup-update-${incident.id}`)
-          ?.addEventListener("click", () => {
-            navigate(`/report-incident?edit=${incident.id}`);
-          });
+        if (canEdit) {
+          popupContent
+            .querySelector(`#btn-popup-update-${incident.id}`)
+            ?.addEventListener("click", () => {
+              navigate(`/report-incident?edit=${incident.id}`);
+            });
+        }
 
         marker.bindPopup(popupContent, {
           maxWidth: 320,
@@ -766,12 +775,14 @@ export default function IncidentMap() {
                                 ? "Reopen Report"
                                 : "Mark as Resolved"}
                             </button>
-                            <Link
-                              to={`/report-incident?edit=${incident.id}`}
-                              className="btn-action-outline"
-                            >
-                              Update Info
-                            </Link>
+                            {canUserEditIncident && canUserEditIncident(incident) && (
+                              <Link
+                                to={`/report-incident?edit=${incident.id}`}
+                                className="btn-action-outline"
+                              >
+                                Update Info
+                              </Link>
+                            )}
                           </div>
                         </div>
                       )}

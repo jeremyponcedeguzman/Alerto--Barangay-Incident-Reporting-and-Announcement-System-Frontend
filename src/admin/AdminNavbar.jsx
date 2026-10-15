@@ -12,13 +12,14 @@ import {
   UserPlus,
   ClipboardList,
   LogOut,
-  ExternalLink
+  ExternalLink,
+  AlertTriangle
 } from "lucide-react";
 
 export default function AdminNavbar({ activeTab, setActiveTab }) {
   const navigate = useNavigate();
   const { logout, currentUser } = useAuth();
-  const { isBackendOnline } = useIncidents ? useIncidents() : {};
+  const { isBackendOnline, isMongoAvailable } = useIncidents ? useIncidents() : {};
 
   const handleLogout = () => {
     logout();
@@ -37,15 +38,16 @@ export default function AdminNavbar({ activeTab, setActiveTab }) {
   ];
 
   return (
-    <header style={{
-      backgroundColor: "#0f172a",
-      borderBottom: "1px solid #1e293b",
-      padding: "0.75rem 1.5rem",
-      position: "sticky",
-      top: 0,
-      zIndex: 1000,
-      boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)"
-    }}>
+    <>
+      <header style={{
+        backgroundColor: "#0f172a",
+        borderBottom: "1px solid #1e293b",
+        padding: "0.75rem 1.5rem",
+        position: "sticky",
+        top: 0,
+        zIndex: 1000,
+        boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)"
+      }}>
       <div style={{
         maxWidth: "1350px",
         margin: "0 auto",
@@ -88,7 +90,7 @@ export default function AdminNavbar({ activeTab, setActiveTab }) {
                 Official Desk
               </span>
               <span style={{
-                backgroundColor: isBackendOnline ? "#10b981" : "#f59e0b",
+                backgroundColor: (isBackendOnline && isMongoAvailable) ? "#10b981" : "#ef4444",
                 color: "white",
                 fontSize: "0.62rem",
                 fontWeight: 700,
@@ -96,7 +98,7 @@ export default function AdminNavbar({ activeTab, setActiveTab }) {
                 borderRadius: "4px",
                 letterSpacing: "0.03em"
               }}>
-                {isBackendOnline ? "API CONNECTED" : "LOCAL CACHE"}
+                {(isBackendOnline && isMongoAvailable) ? "MONGODB ONLINE" : "MONGODB OFFLINE"}
               </span>
             </div>
             <span style={{ color: "#94a3b8", fontSize: "0.72rem", display: "block" }}>
@@ -214,5 +216,29 @@ export default function AdminNavbar({ activeTab, setActiveTab }) {
         </div>
       </div>
     </header>
+    {(!isBackendOnline || !isMongoAvailable) && (
+      <div
+        style={{
+          backgroundColor: "#450a0a",
+          borderBottom: "1px solid #7f1d1d",
+          color: "#fca5a5",
+          padding: "0.55rem 1.25rem",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "0.5rem",
+          fontSize: "0.82rem",
+          fontWeight: 600,
+          textAlign: "center",
+          zIndex: 900,
+        }}
+      >
+        <AlertTriangle size={15} style={{ flexShrink: 0, color: "#ef4444" }} />
+        <span>
+          <strong>MongoDB Database Unavailable:</strong> Backend API connection to MongoDB is offline. Admin operations are operating in local cache mode.
+        </span>
+      </div>
+    )}
+  </>
   );
 }

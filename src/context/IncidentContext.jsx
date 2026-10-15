@@ -7,8 +7,56 @@ import {
 } from "../utils/timeUtils";
 import { logAuditEvent, AUDIT_CATEGORIES } from "../utils/auditLogger";
 import { incidentsApi, alertsApi, healthApi } from "../api";
+import { useAuth } from "./AuthContext";
 
 const IncidentContext = createContext(null);
+
+export function isUserJuanDelaCruz(user) {
+  if (!user) return true; // defaults to Juan Dela Cruz for demo
+  if (user.id === "RES-DEMO-01") return true;
+  const fullName = `${user.firstName || ""} ${user.lastName || ""}`.trim().toLowerCase();
+  if (fullName === "juan dela cruz" || user.name?.toLowerCase() === "juan dela cruz") return true;
+  if (user.email === "resident@gmail.com") return true;
+  return false;
+}
+
+export function canUserEditIncident(incident, user) {
+  if (!incident) return false;
+
+  // If user is null, they're using the default Juan Dela Cruz demo session
+  if (!user) {
+    const rName = (incident.reportedBy || incident.reporterName || "").trim().toLowerCase();
+    return rName === "juan dela cruz" || incident.isUserReport;
+  }
+
+  // Admin can edit all incidents
+  if (user.role === "admin" || user.email === "admin@anupul.gov") {
+    return true;
+  }
+
+  const isJuan = isUserJuanDelaCruz(user);
+  const reporterName = (incident.reportedBy || incident.reporterName || "").trim().toLowerCase();
+  const reporterId = incident.reporterId || incident.userId;
+
+  // Incident created by Juan Dela Cruz:
+  const belongsToJuan = reporterName === "juan dela cruz" || reporterId === "RES-DEMO-01";
+
+  if (belongsToJuan) {
+    // ONLY Juan Dela Cruz can edit his own reports!
+    return isJuan;
+  }
+
+  // If another user is logged in:
+  if (!isJuan) {
+    if (reporterId && user.id && String(reporterId) === String(user.id)) return true;
+    const userFullName = `${user.firstName || ""} ${user.lastName || ""}`.trim().toLowerCase();
+    if (reporterName && userFullName && reporterName === userFullName) return true;
+    if (incident.reporterContact && user.contactNumber && incident.reporterContact === user.contactNumber) return true;
+    if (incident.reporterEmail && user.email && incident.reporterEmail === user.email) return true;
+  }
+
+  return false;
+}
 
 export const INCIDENT_CATEGORIES = {
   fire: {
@@ -311,6 +359,9 @@ const INITIAL_ANNOUNCEMENTS = [
 ];
 
 export function IncidentProvider({ children }) {
+  const auth = useAuth() || {};
+  const currentUser = auth.currentUser;
+
   // Load from local storage or fallback to initial data
   const [incidents, setIncidents] = useState(() => {
     const saved = localStorage.getItem("barangay_incidents");
@@ -365,14 +416,20 @@ export function IncidentProvider({ children }) {
   }, []);
 
   const [isBackendOnline, setIsBackendOnline] = useState(false);
+  const [isMongoAvailable, setIsMongoAvailable] = useState(false);
 
   // Sync data with backend API (Express + MongoDB)
   const refreshFromBackend = useCallback(async () => {
     try {
       const health = await healthApi.check();
-      if (health.success) {
-        setIsBackendOnline(true);
+      const mongoOk = Boolean(
+        health.success && (health.mongoConnected === undefined || health.mongoConnected === true)
+      );
 
+      setIsBackendOnline(Boolean(health.success));
+      setIsMongoAvailable(mongoOk);
+
+      if (health.success && mongoOk) {
         // Fetch live incidents from backend
         const incRes = await incidentsApi.getAll();
         if (incRes.success && Array.isArray(incRes.data) && incRes.data.length > 0) {
@@ -384,9 +441,12 @@ export function IncidentProvider({ children }) {
             severity: (inc.severity || inc.urgency || 'medium').toLowerCase(),
             status: inc.status || 'Pending',
             locationName: inc.locationName || inc.exactLocation || inc.purok || 'Barangay Anupul',
-            lat: inc.lat ?? 14.5605,
-            lng: inc.lng ?? 121.0182,
+            lat: inc.lat ?? 15.2894,
+            lng: inc.lng ?? 120.5718,
             reportedBy: inc.reportedBy || inc.reporterName || 'Resident',
+            reporterId: inc.reporterId || inc.userId || '',
+            reporterContact: inc.reporterContact || '',
+            reporterEmail: inc.reporterEmail || '',
             isUserReport: inc.isUserReport ?? true,
             createdAt: inc.createdAt || new Date().toISOString(),
             description: inc.description || '',
@@ -414,10 +474,12 @@ export function IncidentProvider({ children }) {
         }
       } else {
         setIsBackendOnline(false);
+        setIsMongoAvailable(false);
       }
     } catch (err) {
       console.warn('Backend sync notice:', err.message);
       setIsBackendOnline(false);
+      setIsMongoAvailable(false);
     }
   }, []);
 
@@ -447,11 +509,18 @@ export function IncidentProvider({ children }) {
   // Add a new incident report with real-time ISO createdAt and backend Cloudinary + MongoDB sync
   const addIncident = async (newIncident) => {
     const tempId = `INC-2026-${String(incidents.length + 1).padStart(3, "0")}`;
+    const authorName = newIncident.reportedBy || currentUser?.name || (currentUser?.firstName ? `${currentUser.firstName} ${currentUser.lastName}` : "Juan Dela Cruz");
+    const authorPhone = currentUser?.contactNumber || currentUser?.phone || "0917-123-4567";
+    const authorId = currentUser?.id || (isUserJuanDelaCruz(currentUser) ? "RES-DEMO-01" : `RES-${Date.now()}`);
+
     const formatted = {
       ...newIncident,
       id: tempId,
       createdAt: new Date().toISOString(),
-      reportedBy: CURRENT_USER.name,
+      reportedBy: authorName,
+      reporterId: authorId,
+      reporterContact: authorPhone,
+      reporterEmail: currentUser?.email || "",
       status: "Pending Review",
       votes: 1,
       isUserReport: true,
@@ -462,7 +531,7 @@ export function IncidentProvider({ children }) {
     logAuditEvent({
       category: AUDIT_CATEGORIES.DISPATCH,
       action: "New Incident Reported",
-      actor: CURRENT_USER.name,
+      actor: authorName,
       target: formatted.id,
       details: `Reported: ${formatted.title} at ${formatted.locationName}. Responder assigned: ${formatted.responder || "Unassigned"}.`,
       severity: formatted.severity === "critical" ? "critical" : "warning",
@@ -479,7 +548,9 @@ export function IncidentProvider({ children }) {
         lng: formatted.lng,
         description: formatted.description,
         reportedBy: formatted.reportedBy,
-        reporterContact: CURRENT_USER.phone,
+        reporterContact: authorPhone,
+        reporterEmail: currentUser?.email || "",
+        reporterId: authorId,
         imageEvidence: formatted.imageEvidence || "",
         responder: formatted.responder,
         urgency: formatted.severity === "critical" ? "Critical" : formatted.severity === "high" ? "High" : "Medium",
@@ -559,6 +630,17 @@ export function IncidentProvider({ children }) {
 
   // Full incident update (when resident or official updates details, location, severity, category, photo)
   const updateIncident = async (id, updatedFields) => {
+    const target = incidents.find(
+      (inc) => String(inc.id) === String(id) || String(inc._id) === String(id)
+    );
+
+    if (target && !canUserEditIncident(target, currentUser)) {
+      alert("Permission Denied: You cannot edit reports submitted by other residents.");
+      return { success: false, message: "Permission Denied: You cannot edit reports submitted by other residents." };
+    }
+
+    const editorName = currentUser?.name || (currentUser?.firstName ? `${currentUser.firstName} ${currentUser.lastName}` : "Resident");
+
     setIncidents((prev) =>
       prev.map((inc) =>
         String(inc.id) === String(id) || String(inc._id) === String(id)
@@ -570,7 +652,7 @@ export function IncidentProvider({ children }) {
     logAuditEvent({
       category: AUDIT_CATEGORIES.DISPATCH,
       action: "Incident Information Updated",
-      actor: CURRENT_USER.name,
+      actor: editorName,
       target: String(id),
       details: `Updated details for Incident #${id}: ${updatedFields.title || "Information amended"}.`,
       severity: "notice",
@@ -698,13 +780,46 @@ export function IncidentProvider({ children }) {
 
   // User's own reports with dynamic timestamps
   const userReports = useMemo(() => {
-    return enrichedIncidents.filter((inc) => inc.isUserReport);
-  }, [enrichedIncidents]);
+    const isJuan = isUserJuanDelaCruz(currentUser);
+
+    return enrichedIncidents.filter((inc) => {
+      const reporterName = (inc.reportedBy || inc.reporterName || "").trim().toLowerCase();
+      const reporterId = inc.reporterId || inc.userId;
+      const isJuanReport = reporterName === "juan dela cruz" || reporterId === "RES-DEMO-01";
+
+      if (isJuan) {
+        // Juan Dela Cruz sees his own reports and mock demo user reports
+        return isJuanReport || inc.isUserReport;
+      }
+
+      // If another user is logged in, DO NOT show stuff assigned to/created by Juan Dela Cruz!
+      if (isJuanReport) {
+        return false;
+      }
+
+      // Show reports submitted by this logged-in user
+      if (reporterId && currentUser?.id && String(reporterId) === String(currentUser.id)) {
+        return true;
+      }
+      const userFullName = `${currentUser?.firstName || ""} ${currentUser?.lastName || ""}`.trim().toLowerCase();
+      if (reporterName && userFullName && reporterName === userFullName) {
+        return true;
+      }
+      if (inc.reporterContact && currentUser?.contactNumber && inc.reporterContact === currentUser.contactNumber) {
+        return true;
+      }
+      if (inc.reporterEmail && currentUser?.email && inc.reporterEmail === currentUser.email) {
+        return true;
+      }
+
+      return false;
+    });
+  }, [enrichedIncidents, currentUser]);
 
   return (
     <IncidentContext.Provider
       value={{
-        currentUser: CURRENT_USER,
+        currentUser: currentUser || CURRENT_USER,
         incidents: enrichedIncidents,
         now,
         filteredIncidents,
@@ -731,6 +846,9 @@ export function IncidentProvider({ children }) {
         announcements,
         addAnnouncement,
         isBackendOnline,
+        isMongoAvailable,
+        canUserEditIncident: (inc) => canUserEditIncident(inc, currentUser),
+        isUserJuanDelaCruz: () => isUserJuanDelaCruz(currentUser),
         refreshFromBackend,
       }}
     >

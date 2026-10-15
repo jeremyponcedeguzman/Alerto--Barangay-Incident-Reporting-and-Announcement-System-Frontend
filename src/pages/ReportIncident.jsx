@@ -32,13 +32,15 @@ export default function ReportIncident() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const editId = searchParams.get("edit") || searchParams.get("id");
-  const { addIncident, updateIncident, incidents, currentUser } = useIncidents();
+  const { addIncident, updateIncident, incidents, currentUser, canUserEditIncident } = useIncidents();
 
   const existingIncident = editId
     ? incidents?.find(
         (i) => String(i.id) === String(editId) || String(i._id) === String(editId)
       )
     : null;
+
+  const isUnauthorizedEdit = existingIncident && canUserEditIncident && !canUserEditIncident(existingIncident);
 
   const [category, setCategory] = useState("flood");
   const [severity, setSeverity] = useState("high");
@@ -305,6 +307,58 @@ export default function ReportIncident() {
       alert("Error submitting incident: " + err.message);
     }
   };
+
+  if (isUnauthorizedEdit) {
+    return (
+      <div className="report-incident-page" style={{ padding: "3rem 1.5rem" }}>
+        <div className="report-container" style={{ maxWidth: "600px", margin: "0 auto" }}>
+          <div className="report-card" style={{ textAlign: "center", padding: "3rem 2rem" }}>
+            <div style={{
+              width: "64px",
+              height: "64px",
+              borderRadius: "50%",
+              backgroundColor: "#fee2e2",
+              color: "#dc2626",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "0 auto 1.25rem"
+            }}>
+              <AlertTriangle size={32} />
+            </div>
+            <h2 style={{ fontSize: "1.5rem", fontWeight: 800, color: "#0f172a", marginBottom: "0.5rem" }}>
+              Cannot Edit This Report
+            </h2>
+            <p style={{ color: "#64748b", maxWidth: "460px", margin: "0 auto 1.5rem", fontSize: "0.92rem", lineHeight: 1.5 }}>
+              This incident report ({existingIncident.id}) was submitted by <strong>{existingIncident.reportedBy || "another resident"}</strong>. You only have permission to edit reports you created yourself.
+            </p>
+            <div style={{ display: "flex", gap: "0.75rem", justifyContent: "center", flexWrap: "wrap" }}>
+              <Link to="/map" className="btn-go-to-map" style={{ textDecoration: "none" }}>
+                Return to Live Map
+              </Link>
+              <Link
+                to="/report-incident"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  padding: "0.75rem 1.5rem",
+                  borderRadius: "9999px",
+                  border: "1px solid #cbd5e1",
+                  background: "white",
+                  color: "#334155",
+                  fontWeight: 700,
+                  fontSize: "0.88rem",
+                  textDecoration: "none"
+                }}
+              >
+                File New Report
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="report-incident-page">

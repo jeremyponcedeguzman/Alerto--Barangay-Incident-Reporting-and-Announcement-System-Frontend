@@ -22,7 +22,7 @@ import { useAuth } from "../context/AuthContext";
 export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
-  const { userReports, activeRole, setActiveRole, isBackendOnline } = useIncidents();
+  const { userReports, activeRole, setActiveRole, isBackendOnline, isMongoAvailable } = useIncidents();
   const { currentUser, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -36,40 +36,44 @@ export default function Navbar() {
     navigate("/login");
   };
 
+  const isDbOnline = Boolean(isBackendOnline && isMongoAvailable);
+
   return (
-    <header className="navbar-header">
-      <div className="navbar-container">
-        {/* Brand / Logo */}
-        <Link to="/" className="navbar-brand" onClick={() => setMobileMenuOpen(false)}>
-          <div className="brand-logo-icon">
-            <Radio className="brand-beacon-icon animate-pulse" size={20} />
-          </div>
-          <div className="brand-text">
-            <div className="brand-name">
-              ALERTO{" "}
-              <span
-                className="brand-badge"
-                style={{
-                  backgroundColor: isBackendOnline ? "#10b981" : "#f59e0b",
-                  color: "white",
-                  fontSize: "0.68rem",
-                  padding: "0.15rem 0.45rem",
-                  borderRadius: "6px",
-                  marginLeft: "0.3rem",
-                  letterSpacing: "0.03em",
-                }}
-                title={
-                  isBackendOnline
-                    ? "Connected to Express Backend & MongoDB Atlas"
-                    : "Connecting to Backend / Local Mode Active"
-                }
-              >
-                {isBackendOnline ? "LIVE API" : "STANDBY"}
-              </span>
+    <>
+      <header className="navbar-header">
+        <div className="navbar-container">
+          {/* Brand / Logo */}
+          <Link to="/" className="navbar-brand" onClick={() => setMobileMenuOpen(false)}>
+            <div className="brand-logo-icon">
+              <Radio className="brand-beacon-icon animate-pulse" size={20} />
             </div>
-            <div className="brand-sub">Brgy. Anupul</div>
-          </div>
-        </Link>
+            <div className="brand-text">
+              <div className="brand-name">
+                ALERTO{" "}
+                <span
+                  className="brand-badge"
+                  style={{
+                    backgroundColor: isDbOnline ? "#10b981" : "#ef4444",
+                    color: "white",
+                    fontSize: "0.68rem",
+                    padding: "0.15rem 0.45rem",
+                    borderRadius: "6px",
+                    marginLeft: "0.3rem",
+                    letterSpacing: "0.03em",
+                    fontWeight: 700,
+                  }}
+                  title={
+                    isDbOnline
+                      ? "Connected to Express Backend & MongoDB Atlas"
+                      : "MongoDB Database Unavailable - Local Standby Active"
+                  }
+                >
+                  {isDbOnline ? "MONGODB ONLINE" : "MONGODB OFFLINE"}
+                </span>
+              </div>
+              <div className="brand-sub">Brgy. Anupul</div>
+            </div>
+          </Link>
 
         {/* Desktop Navigation Links */}
         <nav className="navbar-nav desktop-nav">
@@ -350,5 +354,30 @@ export default function Navbar() {
         </div>
       )}
     </header>
+      {!isDbOnline && (
+        <div
+          className="db-offline-warning-bar"
+          style={{
+            backgroundColor: "#fef2f2",
+            borderBottom: "1px solid #fecaca",
+            color: "#991b1b",
+            padding: "0.55rem 1.25rem",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "0.5rem",
+            fontSize: "0.82rem",
+            fontWeight: 600,
+            textAlign: "center",
+            zIndex: 900,
+          }}
+        >
+          <AlertTriangle size={15} style={{ flexShrink: 0, color: "#dc2626" }} />
+          <span>
+            <strong>MongoDB Database Unavailable:</strong> Backend database connection is offline. Showing local standby data.
+          </span>
+        </div>
+      )}
+    </>
   );
 }

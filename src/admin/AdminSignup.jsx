@@ -42,7 +42,7 @@ export default function AdminSignup() {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const newErrors = {};
 
@@ -77,7 +77,7 @@ export default function AdminSignup() {
     }
 
     if (registerAdmin) {
-      const result = registerAdmin({
+      const result = await registerAdmin({
         firstName: formData.firstName,
         lastName: formData.lastName,
         email: formData.email,

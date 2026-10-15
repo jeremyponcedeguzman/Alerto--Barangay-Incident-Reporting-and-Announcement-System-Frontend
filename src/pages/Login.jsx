@@ -48,7 +48,7 @@ export default function Login() {
     }
   };
 
-  const handleLoginSubmit = (e) => {
+  const handleLoginSubmit = async (e) => {
     e.preventDefault();
     setAuthError("");
 
@@ -58,7 +58,7 @@ export default function Login() {
     }
 
     if (login) {
-      const result = login(loginData.identifier, loginData.password);
+      const result = await login(loginData.identifier, loginData.password);
       if (result.success) {
         if (result.user?.role === "admin") {
           navigate("/admin-approvals");
@@ -76,7 +76,7 @@ export default function Login() {
     }
   };
 
-  const handleSignupSubmit = (e) => {
+  const handleSignupSubmit = async (e) => {
     e.preventDefault();
     const newErrors = {};
 
@@ -101,7 +101,7 @@ export default function Login() {
     }
 
     if (register) {
-      register(signupData);
+      await register(signupData);
       alert("Registration submitted! Your Barangay Anupul residency is awaiting verification.");
       setIsLogin(true);
       setLoginData({

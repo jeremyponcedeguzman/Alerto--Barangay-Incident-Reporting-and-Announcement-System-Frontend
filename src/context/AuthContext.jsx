@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { logAuditEvent, AUDIT_CATEGORIES } from "../utils/auditLogger";
+import { authApi, residentsApi, healthApi } from "../api";
 
 const AuthContext = createContext(null);
 
@@ -122,7 +123,69 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener("storage", handleStorageChange);
   }, [currentUser]);
 
-  const register = (userData) => {
+  // Sync backend officials and residents on mount
+  const refreshUsersFromBackend = useCallback(async () => {
+    try {
+      const health = await healthApi.check();
+      if (!health.success) return;
+
+      const officialsRes = await authApi.getOfficials();
+      const residentsRes = await residentsApi.getAll();
+
+      const backendUsers = [];
+
+      if (officialsRes.success && Array.isArray(officialsRes.data)) {
+        officialsRes.data.forEach((off) => {
+          const parts = (off.fullName || "").split(" ");
+          backendUsers.push({
+            id: off._id || off.id,
+            firstName: parts[0] || "Official",
+            lastName: parts.slice(1).join(" ") || "",
+            email: off.email,
+            contactNumber: off.contactNumber || "0917-123-4567",
+            officialPosition: off.position || "Barangay Official",
+            role: (off.role || "").toLowerCase().includes("admin") ? "admin" : "official",
+            verificationStatus: "approved",
+            submittedAt: new Date(off.createdAt || Date.now()).toLocaleString(),
+          });
+        });
+      }
+
+      if (residentsRes.success && Array.isArray(residentsRes.data)) {
+        residentsRes.data.forEach((res) => {
+          const parts = (res.fullName || "").split(" ");
+          backendUsers.push({
+            id: res._id || res.id,
+            firstName: parts[0] || "Resident",
+            lastName: parts.slice(1).join(" ") || "",
+            email: res.email || `${res.fullName?.toLowerCase().replace(/\s+/g, ".")}@citizen.anupul.ph`,
+            contactNumber: res.contactNumber || "",
+            sitioAddress: res.purok || res.address || "Sitio Centro",
+            role: "resident",
+            verificationStatus: "approved",
+            submittedAt: new Date(res.createdAt || Date.now()).toLocaleString(),
+          });
+        });
+      }
+
+      if (backendUsers.length > 0) {
+        setUserDatabase((prev) => {
+          const mergedMap = new Map();
+          prev.forEach((u) => mergedMap.set(u.id, u));
+          backendUsers.forEach((u) => mergedMap.set(u.id, u));
+          return Array.from(mergedMap.values());
+        });
+      }
+    } catch (err) {
+      console.warn("Backend user sync note:", err.message);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshUsersFromBackend();
+  }, [refreshUsersFromBackend]);
+
+  const register = async (userData) => {
     const newResident = {
       id: "REG-" + Date.now(),
       ...userData,
@@ -144,10 +207,23 @@ export function AuthProvider({ children }) {
       details: `New residency application submitted for ${newResident.sitioAddress || "Barangay Anupul"}.`,
       severity: "notice",
     });
+
+    // Also send to backend resident directory
+    try {
+      await residentsApi.register({
+        fullName: `${userData.firstName} ${userData.lastName}`,
+        contactNumber: userData.contactNumber || "0917-123-4567",
+        purok: userData.sitioAddress || "Sitio Centro",
+        address: userData.sitioAddress || "Barangay Anupul",
+      });
+    } catch (err) {
+      console.warn("Backend resident register notice:", err.message);
+    }
+
     return true;
   };
 
-  const registerAdmin = (adminData) => {
+  const registerAdmin = async (adminData) => {
     const existing = (userDatabase || []).find(
       (u) => u.email?.toLowerCase().trim() === adminData.email?.toLowerCase().trim()
     );
@@ -183,10 +259,24 @@ export function AuthProvider({ children }) {
       severity: "warning",
     });
 
+    // Also register on backend REST API
+    try {
+      await authApi.register({
+        fullName: `${adminData.firstName} ${adminData.lastName}`,
+        email: adminData.email,
+        password: adminData.password,
+        role: "Barangay Official",
+        position: adminData.officialPosition || "Barangay Staff",
+        contactNumber: adminData.contactNumber || "0917-123-4567",
+      });
+    } catch (err) {
+      console.warn("Backend admin register notice:", err.message);
+    }
+
     return { success: true };
   };
 
-  const login = (identifier, password) => {
+  const login = async (identifier, password) => {
     const cleanId = (identifier || "").trim().toLowerCase();
 
     // 1. Super Admin Pass / Bypass
@@ -217,7 +307,40 @@ export function AuthProvider({ children }) {
       return { success: true, user: DEFAULT_RESIDENT };
     }
 
-    // 3. Find user in database by email or contact number
+    // 3. Attempt Live Backend API Login (/api/auth/login)
+    if (cleanId.includes("@")) {
+      try {
+        const apiRes = await authApi.login({ email: cleanId, password });
+        if (apiRes.success && apiRes.user) {
+          const names = (apiRes.user.fullName || "").split(" ");
+          const liveUser = {
+            id: apiRes.user.id || apiRes.user._id,
+            firstName: names[0] || "Official",
+            lastName: names.slice(1).join(" ") || "User",
+            email: apiRes.user.email,
+            contactNumber: apiRes.user.contactNumber || "0917-123-4567",
+            officialPosition: apiRes.user.position || "Barangay Official",
+            role: (apiRes.user.role || "").toLowerCase().includes("admin") ? "admin" : "official",
+            verificationStatus: "approved",
+            token: apiRes.token,
+          };
+          setCurrentUser(liveUser);
+          logAuditEvent({
+            category: AUDIT_CATEGORIES.SECURITY,
+            action: "Official Login (Backend API)",
+            actor: apiRes.user.fullName,
+            target: apiRes.user.id,
+            details: `Authenticated via REST API. Role: ${apiRes.user.role}.`,
+            severity: "info",
+          });
+          return { success: true, user: liveUser };
+        }
+      } catch (err) {
+        console.warn("Backend auth notice:", err.message);
+      }
+    }
+
+    // 4. Find user in database by email or contact number (local fallback)
     const user = userDatabase.find(
       (u) =>
         (u.email && u.email.toLowerCase().trim() === cleanId) ||
@@ -281,6 +404,7 @@ export function AuthProvider({ children }) {
         severity: "info",
       });
     }
+    authApi.logout();
     setCurrentUser(null);
   };
 
@@ -440,6 +564,7 @@ export function AuthProvider({ children }) {
         deleteUser,
         addUser,
         changePassword,
+        refreshUsersFromBackend,
       }}
     >
       {children}

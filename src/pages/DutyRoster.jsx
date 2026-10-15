@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Shield, Phone, Clock, Search, UserCheck, UserX, ArrowLeft } from "lucide-react";
+import { authApi } from "../api";
 
 export const INITIAL_PERSONNEL = [
   { id: 1, name: "Hon. Roberto Santos", role: "Barangay Captain", category: "Official", isDuty: true, shift: "Day (8:00 AM - 5:00 PM)", contact: "0917-111-2222", badge: "BRGY-CPT-01" },
@@ -22,6 +23,36 @@ export default function DutyRoster() {
       return INITIAL_PERSONNEL;
     }
   });
+
+  // Sync with officials from backend
+  useEffect(() => {
+    async function loadBackendOfficials() {
+      try {
+        const res = await authApi.getOfficials();
+        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+          const backendStaff = res.data.map((off, idx) => ({
+            id: off._id || off.id || idx + 10,
+            name: off.fullName,
+            role: off.position || off.role || "Barangay Official",
+            category: off.role === "Admin" ? "Official" : "Tanod",
+            isDuty: true,
+            shift: "Day (8:00 AM - 5:00 PM)",
+            contact: off.contactNumber || "0917-123-4567",
+            badge: `OFF-${String(idx + 1).padStart(3, '0')}`,
+          }));
+          setPersonnelList((prev) => {
+            const map = new Map();
+            prev.forEach((p) => map.set(p.name, p));
+            backendStaff.forEach((p) => map.set(p.name, p));
+            return Array.from(map.values());
+          });
+        }
+      } catch (err) {
+        console.warn("Backend officials sync note:", err.message);
+      }
+    }
+    loadBackendOfficials();
+  }, []);
 
   const [activeTab, setActiveTab] = useState("ALL");
   const [searchTerm, setSearchTerm] = useState("");

@@ -21,11 +21,11 @@ export default function EditIncident() {
     }
   }, [currentIncident]);
 
-  const handleUpdate = (e) => {
+  const handleUpdate = async (e) => {
     e.preventDefault();
     
     if (updateIncidentDetails) {
-      updateIncidentDetails(id, status, responder);
+      await updateIncidentDetails(id, status, responder);
     }
     
     alert(`Successfully updated Incident #${id}!\n\nNew Status: ${status}\nAssigned Unit: ${responder}`);

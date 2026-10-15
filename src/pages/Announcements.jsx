@@ -10,7 +10,7 @@ export default function Announcements() {
   
   const { announcements, addAnnouncement } = useIncidents() || {};
 
-  const handleBroadcast = (e) => {
+  const handleBroadcast = async (e) => {
     e.preventDefault();
     if (!title.trim() || !message.trim()) {
       alert("Please provide a title and advisory message content.");
@@ -18,7 +18,7 @@ export default function Announcements() {
     }
     
     if (addAnnouncement) {
-      addAnnouncement(title, message, priority);
+      await addAnnouncement(title, message, priority);
     }
     
     setTitle("");

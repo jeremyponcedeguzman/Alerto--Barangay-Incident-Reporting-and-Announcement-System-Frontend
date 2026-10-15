@@ -12,7 +12,7 @@ export default function AdminLogin() {
   const [password, setPassword] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMsg("");
 
@@ -34,7 +34,7 @@ export default function AdminLogin() {
     }
 
     if (login) {
-      const result = login(identifier, password);
+      const result = await login(identifier, password);
 
       if (result && result.success) {
         if (result.user?.role === "admin" || cleanId.includes("admin")) {

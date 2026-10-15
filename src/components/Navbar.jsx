@@ -22,7 +22,7 @@ import { useAuth } from "../context/AuthContext";
 export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
-  const { userReports, activeRole, setActiveRole } = useIncidents();
+  const { userReports, activeRole, setActiveRole, isBackendOnline } = useIncidents();
   const { currentUser, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -46,7 +46,26 @@ export default function Navbar() {
           </div>
           <div className="brand-text">
             <div className="brand-name">
-              ALERTO <span className="brand-badge">LIVE</span>
+              ALERTO{" "}
+              <span
+                className="brand-badge"
+                style={{
+                  backgroundColor: isBackendOnline ? "#10b981" : "#f59e0b",
+                  color: "white",
+                  fontSize: "0.68rem",
+                  padding: "0.15rem 0.45rem",
+                  borderRadius: "6px",
+                  marginLeft: "0.3rem",
+                  letterSpacing: "0.03em",
+                }}
+                title={
+                  isBackendOnline
+                    ? "Connected to Express Backend & MongoDB Atlas"
+                    : "Connecting to Backend / Local Mode Active"
+                }
+              >
+                {isBackendOnline ? "LIVE API" : "STANDBY"}
+              </span>
             </div>
             <div className="brand-sub">Brgy. Anupul</div>
           </div>

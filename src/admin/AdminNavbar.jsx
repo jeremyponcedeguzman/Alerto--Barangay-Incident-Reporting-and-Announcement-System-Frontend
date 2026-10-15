@@ -1,6 +1,7 @@
 import React from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useIncidents } from "../context/IncidentContext";
 import {
   ShieldAlert,
   Users,
@@ -17,6 +18,7 @@ import {
 export default function AdminNavbar({ activeTab, setActiveTab }) {
   const navigate = useNavigate();
   const { logout, currentUser } = useAuth();
+  const { isBackendOnline } = useIncidents ? useIncidents() : {};
 
   const handleLogout = () => {
     logout();
@@ -84,6 +86,17 @@ export default function AdminNavbar({ activeTab, setActiveTab }) {
                 textTransform: "uppercase"
               }}>
                 Official Desk
+              </span>
+              <span style={{
+                backgroundColor: isBackendOnline ? "#10b981" : "#f59e0b",
+                color: "white",
+                fontSize: "0.62rem",
+                fontWeight: 700,
+                padding: "0.15rem 0.45rem",
+                borderRadius: "4px",
+                letterSpacing: "0.03em"
+              }}>
+                {isBackendOnline ? "API CONNECTED" : "LOCAL CACHE"}
               </span>
             </div>
             <span style={{ color: "#94a3b8", fontSize: "0.72rem", display: "block" }}>

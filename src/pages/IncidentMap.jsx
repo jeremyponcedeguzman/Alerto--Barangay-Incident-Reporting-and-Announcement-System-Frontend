@@ -14,7 +14,8 @@ import {
   ChevronLeft,
   Sparkles,
   Activity,
-  PlusCircle
+  PlusCircle,
+  ShieldCheck
 } from "lucide-react";
 import {
   useIncidents,

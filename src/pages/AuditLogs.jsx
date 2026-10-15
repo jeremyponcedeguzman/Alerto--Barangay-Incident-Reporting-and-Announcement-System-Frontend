@@ -20,6 +20,7 @@ import {
 import {
   getAuditLogs,
   clearAuditLogs,
+  fetchAuditLogsFromBackend,
   AUDIT_CATEGORIES
 } from "../utils/auditLogger";
 
@@ -30,12 +31,18 @@ export default function AuditLogs() {
   const [severityFilter, setSeverityFilter] = useState("ALL");
   const [selectedLog, setSelectedLog] = useState(null);
 
-  const refreshLogs = () => {
-    setLogs(getAuditLogs());
+  const refreshLogs = async () => {
+    const backendLogs = await fetchAuditLogsFromBackend();
+    if (backendLogs) setLogs(backendLogs);
+    else setLogs(getAuditLogs());
   };
 
   useEffect(() => {
-    const handleStorage = () => refreshLogs();
+    fetchAuditLogsFromBackend().then((res) => {
+      if (res) setLogs(res);
+    });
+
+    const handleStorage = () => setLogs(getAuditLogs());
     window.addEventListener("storage", handleStorage);
     return () => window.removeEventListener("storage", handleStorage);
   }, []);

@@ -90,6 +90,8 @@ export const INITIAL_AUDIT_LOGS = [
   },
 ];
 
+import { auditLogsApi } from "../api";
+
 export function getAuditLogs() {
   const saved = localStorage.getItem(AUDIT_STORAGE_KEY);
   if (!saved) {
@@ -104,10 +106,37 @@ export function getAuditLogs() {
   }
 }
 
+export async function fetchAuditLogsFromBackend() {
+  try {
+    const res = await auditLogsApi.getAll();
+    if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+      const mapped = res.data.map((l) => ({
+        id: l.customId || l._id || l.id,
+        _id: l._id,
+        timestamp: l.createdAt || l.timestamp,
+        formattedTime: new Date(l.createdAt || l.timestamp).toLocaleTimeString(),
+        category: l.category || AUDIT_CATEGORIES.SYSTEM,
+        action: l.action,
+        actor: l.actor || "System",
+        target: l.target || "N/A",
+        details: l.details || "",
+        severity: l.severity || "info",
+      }));
+      localStorage.setItem(AUDIT_STORAGE_KEY, JSON.stringify(mapped));
+      window.dispatchEvent(new Event("storage"));
+      return mapped;
+    }
+  } catch (err) {
+    console.warn("Backend audit log sync note:", err.message);
+  }
+  return getAuditLogs();
+}
+
 export function logAuditEvent({ category, action, actor = "System", target = "N/A", details = "", severity = "info" }) {
   const currentLogs = getAuditLogs();
+  const customId = `LOG-2026-${String(Date.now()).slice(-6)}`;
   const newEntry = {
-    id: `LOG-2026-${String(Date.now()).slice(-6)}`,
+    id: customId,
     timestamp: new Date().toISOString(),
     formattedTime: "Just now",
     category: category || AUDIT_CATEGORIES.SYSTEM,
@@ -122,10 +151,20 @@ export function logAuditEvent({ category, action, actor = "System", target = "N/
 
   // Dispatch storage event so active windows update in real time
   window.dispatchEvent(new Event("storage"));
+
+  // Asynchronously persist to MongoDB
+  auditLogsApi.create(newEntry).catch((err) => {
+    console.warn("Backend audit logging note:", err.message);
+  });
+
   return newEntry;
 }
 
 export function clearAuditLogs() {
   localStorage.setItem(AUDIT_STORAGE_KEY, JSON.stringify([]));
   window.dispatchEvent(new Event("storage"));
+
+  auditLogsApi.clear().catch((err) => {
+    console.warn("Backend clear audit logs note:", err.message);
+  });
 }

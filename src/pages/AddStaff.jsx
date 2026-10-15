@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { INITIAL_PERSONNEL } from "./DutyRoster";
 import { logAuditEvent, AUDIT_CATEGORIES } from "../utils/auditLogger";
+import { staffApi } from "../api";
 
 export default function AddStaff() {
   const [staffList, setStaffList] = useState(() => {
@@ -33,6 +34,32 @@ export default function AddStaff() {
   useEffect(() => {
     localStorage.setItem("alerto_staff_roster", JSON.stringify(staffList));
   }, [staffList]);
+
+  // Sync with live staff from backend
+  useEffect(() => {
+    async function loadLiveStaff() {
+      try {
+        const res = await staffApi.getAll();
+        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+          const live = res.data.map((s, idx) => ({
+            id: s.customId || s._id || s.id || idx + 1,
+            _id: s._id,
+            name: s.name,
+            role: s.role,
+            category: s.category || "Official",
+            isDuty: s.isDuty !== undefined ? s.isDuty : true,
+            shift: s.shift || "Day (8:00 AM - 5:00 PM)",
+            contact: s.contact || "0917-123-4567",
+            badge: s.badge || `STF-${String(idx + 1).padStart(3, "0")}`,
+          }));
+          setStaffList(live);
+        }
+      } catch (err) {
+        console.warn("Backend staff sync note:", err.message);
+      }
+    }
+    loadLiveStaff();
+  }, []);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("ALL");
@@ -101,6 +128,16 @@ export default function AddStaff() {
     const updated = [newStaff, ...staffList];
     setStaffList(updated);
 
+    // Persist to backend MongoDB
+    staffApi.create(newStaff).then((res) => {
+      if (res.success && res.data) {
+        const saved = res.data;
+        setStaffList((prev) =>
+          prev.map((s) => (s.id === newStaff.id ? { ...s, _id: saved._id, id: saved.customId || saved._id } : s))
+        );
+      }
+    }).catch((err) => console.warn("Backend staff create note:", err.message));
+
     logAuditEvent({
       category: AUDIT_CATEGORIES.STAFF,
       action: "New Staff Onboarded",
@@ -126,9 +163,17 @@ export default function AddStaff() {
   };
 
   const handleToggleDuty = (staffId) => {
+    let nextDuty = true;
+    const targetStaff = staffList.find((s) => s.id === staffId);
+    if (targetStaff) {
+      nextDuty = !targetStaff.isDuty;
+      staffApi.update(targetStaff._id || staffId, { isDuty: nextDuty }).catch((err) => {
+        console.warn("Backend duty update note:", err.message);
+      });
+    }
+
     const updated = staffList.map((s) => {
       if (s.id === staffId) {
-        const nextDuty = !s.isDuty;
         logAuditEvent({
           category: AUDIT_CATEGORIES.STAFF,
           action: "Duty Status Changed",
@@ -148,6 +193,10 @@ export default function AddStaff() {
     if (window.confirm(`Remove ${staff.name} (${staff.role}) from the official staff roster?`)) {
       const updated = staffList.filter((s) => s.id !== staff.id);
       setStaffList(updated);
+
+      staffApi.delete(staff._id || staff.id || staff.badge).catch((err) => {
+        console.warn("Backend staff delete note:", err.message);
+      });
 
       logAuditEvent({
         category: AUDIT_CATEGORIES.STAFF,

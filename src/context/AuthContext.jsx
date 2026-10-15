@@ -424,6 +424,12 @@ export function AuthProvider({ children }) {
       setCurrentUser(approvedUser);
     }
 
+    // Persist verification status to MongoDB
+    const backendId = targetUser?._id || userId;
+    residentsApi.update(backendId, { verificationStatus: "approved" }).catch((err) => {
+      console.warn("Backend resident approval notice:", err.message);
+    });
+
     logAuditEvent({
       category: AUDIT_CATEGORIES.VERIFICATION,
       action: "Resident Verification Approved",
@@ -452,6 +458,12 @@ export function AuthProvider({ children }) {
       setCurrentUser(rejectedUser);
     }
 
+    // Persist rejection to MongoDB
+    const backendId = targetUser?._id || userId;
+    residentsApi.update(backendId, { verificationStatus: "rejected", rejectionReason: reason }).catch((err) => {
+      console.warn("Backend resident rejection notice:", err.message);
+    });
+
     logAuditEvent({
       category: AUDIT_CATEGORIES.VERIFICATION,
       action: "Resident Verification Rejected",
@@ -473,6 +485,11 @@ export function AuthProvider({ children }) {
       setCurrentUser({ ...currentUser, role: newRole });
     }
 
+    const backendId = targetUser?._id || userId;
+    residentsApi.update(backendId, { role: newRole }).catch((err) => {
+      console.warn("Backend role update notice:", err.message);
+    });
+
     logAuditEvent({
       category: AUDIT_CATEGORIES.STAFF,
       action: "User Role Modified",
@@ -487,6 +504,11 @@ export function AuthProvider({ children }) {
     const targetUser = userDatabase.find((u) => u.id === userId);
     const updatedDb = userDatabase.filter((u) => u.id !== userId);
     setUserDatabase(updatedDb);
+
+    const backendId = targetUser?._id || userId;
+    residentsApi.delete(backendId).catch((err) => {
+      console.warn("Backend user delete notice:", err.message);
+    });
 
     logAuditEvent({
       category: AUDIT_CATEGORIES.SECURITY,
@@ -510,6 +532,34 @@ export function AuthProvider({ children }) {
     };
     setUserDatabase((prev) => [...prev, newUser]);
 
+    // Persist to MongoDB backend
+    if (userData.role === "admin" || userData.role === "official") {
+      authApi.register({
+        fullName: `${userData.firstName} ${userData.lastName}`,
+        email: userData.email,
+        password: userData.password || "password123",
+        role: userData.role === "admin" ? "Admin" : "Barangay Official",
+        position: userData.officialPosition || "Barangay Staff",
+        contactNumber: userData.contactNumber || "0917-123-4567",
+      }).catch((err) => console.warn("Backend admin add notice:", err.message));
+    } else {
+      residentsApi.create({
+        fullName: `${userData.firstName} ${userData.lastName}`,
+        email: userData.email,
+        contactNumber: userData.contactNumber || "0917-123-4567",
+        purok: userData.sitioAddress || "Sitio Centro",
+        address: userData.sitioAddress || "Barangay Anupul",
+        verificationStatus: userData.verificationStatus || "approved",
+        role: "resident",
+      }).then((res) => {
+        if (res.success && res.data) {
+          setUserDatabase((prev) =>
+            prev.map((u) => (u.id === newUser.id ? { ...u, _id: res.data._id } : u))
+          );
+        }
+      }).catch((err) => console.warn("Backend resident add notice:", err.message));
+    }
+
     logAuditEvent({
       category: AUDIT_CATEGORIES.STAFF,
       action: "User Created Manually",
@@ -521,14 +571,26 @@ export function AuthProvider({ children }) {
     return newUser;
   };
 
-  const changePassword = (userId, oldPassword, newPassword) => {
+  const changePassword = async (userId, oldPassword, newPassword) => {
     const user = userDatabase.find((u) => u.id === userId);
     if (!user) {
       return { success: false, message: "User account not found." };
     }
 
-    if (user.password !== oldPassword) {
+    if (user.password && user.password !== oldPassword) {
       return { success: false, message: "Current password does not match our records." };
+    }
+
+    // Attempt live backend password update if token is present
+    if (getAuthToken()) {
+      try {
+        const res = await authApi.changePassword({ oldPassword, newPassword });
+        if (!res.success && res.error) {
+          return { success: false, message: res.error };
+        }
+      } catch (err) {
+        console.warn("Backend password change notice:", err.message);
+      }
     }
 
     const updatedDb = userDatabase.map((u) =>

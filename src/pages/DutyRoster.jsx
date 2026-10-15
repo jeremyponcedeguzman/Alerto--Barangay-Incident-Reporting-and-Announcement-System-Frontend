@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Shield, Phone, Clock, Search, UserCheck, UserX, ArrowLeft } from "lucide-react";
-import { authApi, getAuthToken } from "../api";
+import { authApi, staffApi, getAuthToken } from "../api";
 
 export const INITIAL_PERSONNEL = [
   { id: 1, name: "Hon. Roberto Santos", role: "Barangay Captain", category: "Official", isDuty: true, shift: "Day (8:00 AM - 5:00 PM)", contact: "0917-111-2222", badge: "BRGY-CPT-01" },
@@ -24,35 +24,57 @@ export default function DutyRoster() {
     }
   });
 
-  // Sync with officials from backend (only when authenticated)
+  // Sync with staff roster and backend officials
   useEffect(() => {
-    async function loadBackendOfficials() {
-      if (!getAuthToken()) return;
+    async function loadStaffRoster() {
       try {
-        const res = await authApi.getOfficials();
-        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
-          const backendStaff = res.data.map((off, idx) => ({
-            id: off._id || off.id || idx + 10,
-            name: off.fullName,
-            role: off.position || off.role || "Barangay Official",
-            category: off.role === "Admin" ? "Official" : "Tanod",
-            isDuty: true,
-            shift: "Day (8:00 AM - 5:00 PM)",
-            contact: off.contactNumber || "0917-123-4567",
-            badge: `OFF-${String(idx + 1).padStart(3, '0')}`,
+        const staffRes = await staffApi.getAll();
+        if (staffRes.success && Array.isArray(staffRes.data) && staffRes.data.length > 0) {
+          const liveStaff = staffRes.data.map((s, idx) => ({
+            id: s.customId || s._id || s.id || idx + 1,
+            _id: s._id,
+            name: s.name,
+            role: s.role,
+            category: s.category || "Official",
+            isDuty: s.isDuty !== undefined ? s.isDuty : true,
+            shift: s.shift || "Day (8:00 AM - 5:00 PM)",
+            contact: s.contact || "0917-123-4567",
+            badge: s.badge || `STF-${String(idx + 1).padStart(3, '0')}`,
           }));
-          setPersonnelList((prev) => {
-            const map = new Map();
-            prev.forEach((p) => map.set(p.name, p));
-            backendStaff.forEach((p) => map.set(p.name, p));
-            return Array.from(map.values());
-          });
+          setPersonnelList(liveStaff);
+          localStorage.setItem("alerto_staff_roster", JSON.stringify(liveStaff));
+          return;
+        }
+
+        // Fallback to officials if staff is not yet populated
+        if (getAuthToken()) {
+          const res = await authApi.getOfficials();
+          if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+            const backendStaff = res.data.map((off, idx) => ({
+              id: off._id || off.id || idx + 10,
+              name: off.fullName,
+              role: off.position || off.role || "Barangay Official",
+              category: off.role === "Admin" ? "Official" : "Tanod",
+              isDuty: true,
+              shift: "Day (8:00 AM - 5:00 PM)",
+              contact: off.contactNumber || "0917-123-4567",
+              badge: `OFF-${String(idx + 1).padStart(3, '0')}`,
+            }));
+            setPersonnelList((prev) => {
+              const map = new Map();
+              prev.forEach((p) => map.set(p.name, p));
+              backendStaff.forEach((p) => map.set(p.name, p));
+              const merged = Array.from(map.values());
+              localStorage.setItem("alerto_staff_roster", JSON.stringify(merged));
+              return merged;
+            });
+          }
         }
       } catch (err) {
-        console.warn("Backend officials sync note:", err.message);
+        console.warn("Backend staff sync note:", err.message);
       }
     }
-    loadBackendOfficials();
+    loadStaffRoster();
   }, []);
 
   const [activeTab, setActiveTab] = useState("ALL");

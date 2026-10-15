@@ -93,6 +93,8 @@ export const authApi = {
 
   getOfficials: () => apiClient.get('/auth/officials'),
 
+  changePassword: (data) => apiClient.put('/auth/password', data),
+
   logout: () => {
     localStorage.removeItem('alerto_token');
     localStorage.removeItem('token');
@@ -162,7 +164,31 @@ export const residentsApi = {
 };
 
 // ==========================================
-// 6. Image / Cloudinary Upload API (/api/upload)
+// 6. Staff / Duty Roster API (/api/staff)
+// ==========================================
+export const staffApi = {
+  getAll: () => apiClient.get('/staff'),
+
+  create: (staffData) => apiClient.post('/staff', staffData),
+
+  update: (id, staffData) => apiClient.patch(`/staff/${id}`, staffData),
+
+  delete: (id) => apiClient.delete(`/staff/${id}`),
+};
+
+// ==========================================
+// 7. Audit Logging API (/api/audit-logs)
+// ==========================================
+export const auditLogsApi = {
+  getAll: (params = {}) => apiClient.get('/audit-logs', { params }),
+
+  create: (logData) => apiClient.post('/audit-logs', logData),
+
+  clear: () => apiClient.delete('/audit-logs'),
+};
+
+// ==========================================
+// 8. Image / Cloudinary Upload API (/api/upload)
 // ==========================================
 export const uploadApi = {
   uploadImage: (image, folder = 'barangay-emergency/evidence') => {
@@ -177,5 +203,7 @@ export default {
   incidents: incidentsApi,
   alerts: alertsApi,
   residents: residentsApi,
+  staff: staffApi,
+  auditLogs: auditLogsApi,
   upload: uploadApi,
 };

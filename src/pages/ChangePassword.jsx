@@ -55,7 +55,7 @@ export default function ChangePassword() {
     strengthWidth = "50%";
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMsg("");
     setSuccessMsg("");
@@ -87,9 +87,9 @@ export default function ChangePassword() {
 
     setIsSubmitting(true);
 
-    setTimeout(() => {
+    try {
       if (changePassword) {
-        const result = changePassword(currentUser.id, currentPassword, newPassword);
+        const result = await changePassword(currentUser.id, currentPassword, newPassword);
         setIsSubmitting(false);
 
         if (result.success) {
@@ -108,7 +108,10 @@ export default function ChangePassword() {
         setIsSubmitting(false);
         setErrorMsg("Password reset service unavailable.");
       }
-    }, 600);
+    } catch (err) {
+      setIsSubmitting(false);
+      setErrorMsg(err.message || "An error occurred while changing password.");
+    }
   };
 
   return (

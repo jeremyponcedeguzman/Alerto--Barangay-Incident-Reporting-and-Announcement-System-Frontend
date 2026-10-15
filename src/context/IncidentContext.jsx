@@ -58,6 +58,114 @@ export function canUserEditIncident(incident, user) {
   return false;
 }
 
+/**
+ * Determines whether a user / responder has permission to resolve or reopen an incident.
+ * 
+ * Rules:
+ * 1. Barangay Admins have full authority to mark any incident as resolved.
+ * 2. Regular residents / unauthenticated users CANNOT resolve any incident.
+ * 3. Responders can ONLY resolve an incident if they are actively DISPATCHED to that incident.
+ *    (Users not dispatched to an incident cannot resolve it).
+ */
+export function canUserResolveIncident(incident, user, activeRole = "all") {
+  if (!incident) return false;
+
+  // 1. Admin check: full command authority
+  const isAdmin =
+    user?.role === "admin" ||
+    user?.email === "admin@anupul.gov" ||
+    user?.officialPosition === "Barangay Operations Officer" ||
+    user?.officialPosition === "Barangay Captain";
+
+  if (isAdmin) {
+    return true;
+  }
+
+  // 2. Incident must actually have a responder dispatched
+  const responder = (incident.responder || "").toLowerCase().trim();
+  if (
+    !responder ||
+    responder === "unassigned" ||
+    responder === "none" ||
+    incident.status === "Pending Review"
+  ) {
+    return false;
+  }
+
+  // 3. Match against explicitly assigned personnel name (e.g. from Duty Roster)
+  const userFullName = `${user?.firstName || ""} ${user?.lastName || ""}`.trim().toLowerCase();
+  const userName = (user?.name || "").trim().toLowerCase();
+  if (userFullName && responder.includes(userFullName)) return true;
+  if (userName && responder.includes(userName)) return true;
+
+  // 4. Match against user's official account role / position
+  const userRole = (user?.role || "").toLowerCase();
+  const userPosition = (user?.officialPosition || user?.position || "").toLowerCase();
+  const userCategory = (user?.category || "").toLowerCase();
+
+  const isTanod =
+    userRole.includes("tanod") ||
+    userPosition.includes("tanod") ||
+    userCategory.includes("tanod") ||
+    userRole.includes("police");
+  if (isTanod && (responder.includes("tanod") || responder.includes("police") || responder.includes("traffic"))) {
+    return true;
+  }
+
+  const isBfp =
+    userRole.includes("bfp") ||
+    userPosition.includes("fire") ||
+    userCategory.includes("fire") ||
+    userRole.includes("fire");
+  if (isBfp && (responder.includes("bfp") || responder.includes("fire"))) {
+    return true;
+  }
+
+  const isBhert =
+    userRole.includes("bhert") ||
+    userRole.includes("medic") ||
+    userPosition.includes("medic") ||
+    userPosition.includes("health") ||
+    userCategory.includes("medic");
+  if (isBhert && (responder.includes("bhert") || responder.includes("medic") || responder.includes("ambulance"))) {
+    return true;
+  }
+
+  const isDrrmo =
+    userRole.includes("drrmo") ||
+    userPosition.includes("drrmo") ||
+    userPosition.includes("rescue") ||
+    userCategory.includes("disaster");
+  if (isDrrmo && (responder.includes("drrmo") || responder.includes("rescue") || responder.includes("engineering") || responder.includes("meralco"))) {
+    return true;
+  }
+
+  // 5. Match against active perspective filter in Navbar (activeRole):
+  // When a responder tests their assigned view, they can only resolve incidents dispatched to their unit!
+  if (activeRole && activeRole !== "all") {
+    if (activeRole === "tanod") {
+      if (responder.includes("tanod") || responder.includes("police") || responder.includes("traffic")) {
+        return true;
+      }
+    } else if (activeRole === "bfp") {
+      if (responder.includes("bfp") || responder.includes("fire")) {
+        return true;
+      }
+    } else if (activeRole === "bhert") {
+      if (responder.includes("bhert") || responder.includes("medic") || responder.includes("ambulance")) {
+        return true;
+      }
+    } else if (activeRole === "drrmo") {
+      if (responder.includes("drrmo") || responder.includes("rescue") || responder.includes("engineering") || responder.includes("meralco")) {
+        return true;
+      }
+    }
+  }
+
+  // 6. Regular users or responders NOT dispatched to this incident cannot resolve it
+  return false;
+}
+
 export const INCIDENT_CATEGORIES = {
   fire: {
     id: "fire",
@@ -583,15 +691,34 @@ export function IncidentProvider({ children }) {
 
   // Update status (e.g., mark resolved or dispatched)
   const updateIncidentStatus = async (id, newStatus) => {
-    setIncidents((prev) =>
-      prev.map((inc) => (inc.id === id || inc._id === id ? { ...inc, status: newStatus } : inc))
+    const targetIncident = incidents.find(
+      (inc) => String(inc.id) === String(id) || String(inc._id) === String(id)
     );
+
+    // If attempting to resolve or reopen, enforce permission check
+    if (newStatus === "Resolved" || targetIncident?.status === "Resolved") {
+      if (!canUserResolveIncident(targetIncident, currentUser, activeRole)) {
+        alert("Permission Denied: Only emergency personnel dispatched to this incident (or barangay administrators) are authorized to mark it as resolved.");
+        return {
+          success: false,
+          message: "Permission Denied: Regular users and responders not dispatched to this incident cannot resolve it.",
+        };
+      }
+    }
+
+    setIncidents((prev) =>
+      prev.map((inc) => (String(inc.id) === String(id) || String(inc._id) === String(id) ? { ...inc, status: newStatus } : inc))
+    );
+
+    const actorName =
+      currentUser?.name ||
+      (currentUser?.firstName ? `${currentUser.firstName} ${currentUser.lastName}` : "Operations Desk");
 
     logAuditEvent({
       category: AUDIT_CATEGORIES.DISPATCH,
       action: "Incident Status Changed",
-      actor: "Operations Desk",
-      target: id,
+      actor: actorName,
+      target: String(id),
       details: `Status updated to '${newStatus}'.`,
       severity: newStatus === "Resolved" ? "info" : "notice",
     });
@@ -601,6 +728,8 @@ export function IncidentProvider({ children }) {
     } catch (err) {
       console.warn("Backend status update note:", err.message);
     }
+
+    return { success: true };
   };
 
   const updateIncidentDetails = async (id, newStatus, newResponder) => {
@@ -848,6 +977,7 @@ export function IncidentProvider({ children }) {
         isBackendOnline,
         isMongoAvailable,
         canUserEditIncident: (inc) => canUserEditIncident(inc, currentUser),
+        canUserResolveIncident: (inc) => canUserResolveIncident(inc, currentUser, activeRole),
         isUserJuanDelaCruz: () => isUserJuanDelaCruz(currentUser),
         refreshFromBackend,
       }}

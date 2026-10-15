@@ -1,15 +1,20 @@
 import React, { useState, useEffect } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { useIncidents } from "../context/IncidentContext";
-import { ArrowLeft, CheckCircle, ShieldCheck, Clock, MapPin, AlertTriangle } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
+import { ArrowLeft, CheckCircle, ShieldCheck, Clock, MapPin, AlertTriangle, ShieldAlert } from "lucide-react";
 
 export default function EditIncident() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { currentUser } = useAuth() || {};
   
-  const { incidents, updateIncidentDetails } = useIncidents() || {}; 
+  const { incidents, updateIncidentDetails, canUserResolveIncident } = useIncidents() || {}; 
   
   const currentIncident = incidents?.find((inc) => String(inc.id) === String(id));
+
+  const isAdmin = currentUser?.role === "admin" || currentUser?.email === "admin@anupul.gov";
+  const isAuthorized = isAdmin || (canUserResolveIncident && currentIncident ? canUserResolveIncident(currentIncident) : false);
 
   const [status, setStatus] = useState("Pending Review");
   const [responder, setResponder] = useState("");
@@ -24,6 +29,11 @@ export default function EditIncident() {
   const handleUpdate = async (e) => {
     e.preventDefault();
     
+    if (!isAuthorized) {
+      alert("Permission Denied: You are not authorized to dispatch or resolve this incident.");
+      return;
+    }
+
     if (updateIncidentDetails) {
       await updateIncidentDetails(id, status, responder);
     }
@@ -38,6 +48,32 @@ export default function EditIncident() {
         <h2>Incident Not Found</h2>
         <p>Could not locate incident record with ID: {id}</p>
         <button onClick={() => navigate(-1)} className="btn-back-link">Return to Dashboard</button>
+      </div>
+    );
+  }
+
+  if (!isAuthorized) {
+    return (
+      <div className="standard-page-container" style={{ maxWidth: "600px", margin: "3rem auto", padding: "0 1rem", fontFamily: "sans-serif" }}>
+        <div className="standard-card" style={{ backgroundColor: "white", padding: "2.5rem 2rem", borderRadius: "16px", border: "1px solid #fee2e2", textAlign: "center", boxShadow: "0 10px 25px -5px rgba(239,68,68,0.1)" }}>
+          <div style={{ width: "56px", height: "56px", borderRadius: "50%", backgroundColor: "#fee2e2", color: "#dc2626", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1rem" }}>
+            <ShieldAlert size={28} />
+          </div>
+          <h2 style={{ fontSize: "1.4rem", fontWeight: 800, color: "#0f172a", marginBottom: "0.5rem" }}>
+            Restricted Operations Desk
+          </h2>
+          <p style={{ color: "#64748b", fontSize: "0.9rem", lineHeight: 1.5, marginBottom: "1.5rem" }}>
+            Regular residents and personnel not dispatched to Incident #{id} are not authorized to modify dispatch units or mark this incident as resolved.
+          </p>
+          <div style={{ display: "flex", gap: "0.75rem", justifyContent: "center" }}>
+            <Link to="/map" style={{ padding: "0.6rem 1.25rem", backgroundColor: "#ef4444", color: "white", textDecoration: "none", borderRadius: "8px", fontWeight: 700, fontSize: "0.85rem" }}>
+              Return to Incident Map
+            </Link>
+            <Link to="/my-reports" style={{ padding: "0.6rem 1.25rem", backgroundColor: "#f1f5f9", color: "#334155", textDecoration: "none", borderRadius: "8px", fontWeight: 700, fontSize: "0.85rem", border: "1px solid #cbd5e1" }}>
+              My Reports
+            </Link>
+          </div>
+        </div>
       </div>
     );
   }

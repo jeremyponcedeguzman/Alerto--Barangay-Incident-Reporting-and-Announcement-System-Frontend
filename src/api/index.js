@@ -1,5 +1,6 @@
 // API Service Layer for Barangay Emergency Notification System
-// Communicates with Express + MongoDB Atlas + Cloudinary backend
+// Powered by Axios + Express + MongoDB Atlas + Cloudinary backend
+import axios from 'axios';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -11,59 +12,56 @@ export function getAuthToken() {
 }
 
 /**
- * Universal fetch wrapper with automatic JWT injection, JSON parsing, and error handling
+ * Configured Axios Client Instance
  */
-async function request(endpoint, options = {}) {
-  const url = `${API_BASE_URL}${endpoint}`;
-  const token = getAuthToken();
+export const apiClient = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 15000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
 
-  const headers = {
-    ...options.headers,
-  };
-
-  // Only set Content-Type to application/json if body is not FormData
-  if (!(options.body instanceof FormData) && !headers['Content-Type']) {
-    headers['Content-Type'] = 'application/json';
-  }
-
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
-  const config = {
-    ...options,
-    headers,
-  };
-
-  try {
-    const response = await fetch(url, config);
-    const data = await response.json().catch(() => null);
-
-    if (!response.ok) {
-      const errorMsg = data?.message || data?.error || `HTTP error ${response.status}: ${response.statusText}`;
-      const error = new Error(errorMsg);
-      error.status = response.status;
-      error.data = data;
-      throw error;
+// Request Interceptor: Attach JWT bearer token dynamically
+apiClient.interceptors.request.use(
+  (config) => {
+    const token = getAuthToken();
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
     }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
 
-    return { success: true, ...data };
-  } catch (err) {
-    console.warn(`[API] Request failed for ${endpoint}:`, err.message);
+// Response Interceptor: Standardize return structure across app
+apiClient.interceptors.response.use(
+  (response) => {
+    return { success: true, ...response.data };
+  },
+  (error) => {
+    const errorMessage =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      'Network request failed';
+
+    console.warn(`[Axios API] Request failed for ${error.config?.url || 'endpoint'}:`, errorMessage);
+
     return {
       success: false,
-      error: err.message,
-      status: err.status || 0,
+      error: errorMessage,
+      status: error.response?.status || 0,
       data: null,
     };
   }
-}
+);
 
 // ==========================================
 // 1. Health API
 // ==========================================
 export const healthApi = {
-  check: () => request('/health', { method: 'GET' }),
+  check: () => apiClient.get('/health'),
 };
 
 // ==========================================
@@ -71,10 +69,7 @@ export const healthApi = {
 // ==========================================
 export const authApi = {
   login: async (credentials) => {
-    const res = await request('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify(credentials),
-    });
+    const res = await apiClient.post('/auth/login', credentials);
     if (res.success && res.token) {
       localStorage.setItem('alerto_token', res.token);
       localStorage.setItem('token', res.token);
@@ -83,10 +78,7 @@ export const authApi = {
   },
 
   register: async (userData) => {
-    const res = await request('/auth/register', {
-      method: 'POST',
-      body: JSON.stringify(userData),
-    });
+    const res = await apiClient.post('/auth/register', userData);
     if (res.success && res.token) {
       localStorage.setItem('alerto_token', res.token);
       localStorage.setItem('token', res.token);
@@ -94,9 +86,9 @@ export const authApi = {
     return res;
   },
 
-  getMe: () => request('/auth/me', { method: 'GET' }),
+  getMe: () => apiClient.get('/auth/me'),
 
-  getOfficials: () => request('/auth/officials', { method: 'GET' }),
+  getOfficials: () => apiClient.get('/auth/officials'),
 
   logout: () => {
     localStorage.removeItem('alerto_token');
@@ -109,121 +101,61 @@ export const authApi = {
 // ==========================================
 export const incidentsApi = {
   getAll: (params = {}) => {
-    const query = new URLSearchParams();
-    Object.entries(params).forEach(([key, val]) => {
-      if (val !== undefined && val !== null && val !== '' && val !== 'all') {
-        query.append(key, val);
-      }
-    });
-    const queryString = query.toString();
-    return request(`/incidents${queryString ? `?${queryString}` : ''}`, { method: 'GET' });
+    return apiClient.get('/incidents', { params });
   },
 
-  getById: (id) => request(`/incidents/${id}`, { method: 'GET' }),
+  getById: (id) => apiClient.get(`/incidents/${id}`),
 
-  create: (incidentData) => {
-    return request('/incidents', {
-      method: 'POST',
-      body: JSON.stringify(incidentData),
-    });
-  },
+  create: (incidentData) => apiClient.post('/incidents', incidentData),
 
-  update: (id, updateData) => {
-    return request(`/incidents/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify(updateData),
-    });
-  },
+  update: (id, updateData) => apiClient.patch(`/incidents/${id}`, updateData),
 
   updateStatus: (id, status, notes = '') => {
-    return request(`/incidents/${id}/status`, {
-      method: 'PATCH',
-      body: JSON.stringify({ status, actionTakenNotes: notes }),
+    return apiClient.patch(`/incidents/${id}/status`, {
+      status,
+      actionTakenNotes: notes,
     });
   },
 
-  delete: (id) => request(`/incidents/${id}`, { method: 'DELETE' }),
+  delete: (id) => apiClient.delete(`/incidents/${id}`),
 
-  getStats: () => request('/incidents/stats/overview', { method: 'GET' }),
+  getStats: () => apiClient.get('/incidents/stats/overview'),
 };
 
 // ==========================================
 // 4. Emergency Alerts / Announcements API (/api/alerts)
 // ==========================================
 export const alertsApi = {
-  getAll: (params = {}) => {
-    const query = new URLSearchParams();
-    Object.entries(params).forEach(([key, val]) => {
-      if (val !== undefined && val !== null && val !== '') {
-        query.append(key, val);
-      }
-    });
-    const queryString = query.toString();
-    return request(`/alerts${queryString ? `?${queryString}` : ''}`, { method: 'GET' });
-  },
+  getAll: (params = {}) => apiClient.get('/alerts', { params }),
 
-  getActive: () => request('/alerts/active', { method: 'GET' }),
+  getActive: () => apiClient.get('/alerts/active'),
 
-  getById: (id) => request(`/alerts/${id}`, { method: 'GET' }),
+  getById: (id) => apiClient.get(`/alerts/${id}`),
 
-  create: (alertData) => {
-    return request('/alerts', {
-      method: 'POST',
-      body: JSON.stringify(alertData),
-    });
-  },
+  create: (alertData) => apiClient.post('/alerts', alertData),
 
-  update: (id, alertData) => {
-    return request(`/alerts/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(alertData),
-    });
-  },
+  update: (id, alertData) => apiClient.put(`/alerts/${id}`, alertData),
 
-  delete: (id) => request(`/alerts/${id}`, { method: 'DELETE' }),
+  delete: (id) => apiClient.delete(`/alerts/${id}`),
 };
 
 // ==========================================
 // 5. Resident Directory API (/api/residents)
 // ==========================================
 export const residentsApi = {
-  getAll: (params = {}) => {
-    const query = new URLSearchParams();
-    Object.entries(params).forEach(([key, val]) => {
-      if (val !== undefined && val !== null && val !== '') {
-        query.append(key, val);
-      }
-    });
-    const queryString = query.toString();
-    return request(`/residents${queryString ? `?${queryString}` : ''}`, { method: 'GET' });
-  },
+  getAll: (params = {}) => apiClient.get('/residents', { params }),
 
-  getById: (id) => request(`/residents/${id}`, { method: 'GET' }),
+  getById: (id) => apiClient.get(`/residents/${id}`),
 
-  register: (residentData) => {
-    return request('/residents/register', {
-      method: 'POST',
-      body: JSON.stringify(residentData),
-    });
-  },
+  register: (residentData) => apiClient.post('/residents/register', residentData),
 
-  create: (residentData) => {
-    return request('/residents', {
-      method: 'POST',
-      body: JSON.stringify(residentData),
-    });
-  },
+  create: (residentData) => apiClient.post('/residents', residentData),
 
-  update: (id, residentData) => {
-    return request(`/residents/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(residentData),
-    });
-  },
+  update: (id, residentData) => apiClient.put(`/residents/${id}`, residentData),
 
-  delete: (id) => request(`/residents/${id}`, { method: 'DELETE' }),
+  delete: (id) => apiClient.delete(`/residents/${id}`),
 
-  getDemographics: () => request('/residents/stats/demographics', { method: 'GET' }),
+  getDemographics: () => apiClient.get('/residents/stats/demographics'),
 };
 
 // ==========================================
@@ -231,14 +163,12 @@ export const residentsApi = {
 // ==========================================
 export const uploadApi = {
   uploadImage: (image, folder = 'barangay-emergency/evidence') => {
-    return request('/upload', {
-      method: 'POST',
-      body: JSON.stringify({ image, folder }),
-    });
+    return apiClient.post('/upload', { image, folder });
   },
 };
 
 export default {
+  client: apiClient,
   health: healthApi,
   auth: authApi,
   incidents: incidentsApi,

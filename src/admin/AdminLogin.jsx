@@ -1,40 +1,38 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useAuth } from "../context/AuthContext";
 import { ShieldCheck, Lock, Mail, AlertCircle, ArrowLeft } from "lucide-react";
+import { adminLoginSchema } from "../schemas";
 
 export default function AdminLogin() {
   const navigate = useNavigate();
   const auth = useAuth() || {};
   const { login } = auth;
 
-  const [identifier, setIdentifier] = useState("");
-  const [password, setPassword] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    formState: { errors, isSubmitting },
+  } = useForm({
+    resolver: zodResolver(adminLoginSchema),
+    defaultValues: {
+      identifier: "",
+      password: "",
+    },
+  });
+
+  const onSubmit = async (data) => {
     setErrorMsg("");
 
-    if (!identifier.trim() || !password) {
-      setErrorMsg("Please enter your official admin email and password.");
-      return;
-    }
-
-    const cleanId = identifier.trim().toLowerCase();
-
-    // Check for admin domain or official username
-    if (
-      !cleanId.endsWith("@anupul.gov") &&
-      !cleanId.endsWith("@barangay.gov") &&
-      cleanId !== "admin"
-    ) {
-      setErrorMsg("Access denied. Admin portal is strictly for @anupul.gov official accounts.");
-      return;
-    }
+    const cleanId = data.identifier.trim().toLowerCase();
 
     if (login) {
-      const result = await login(identifier, password);
+      const result = await login(cleanId, data.password);
 
       if (result && result.success) {
         if (result.user?.role === "admin" || cleanId.includes("admin")) {
@@ -48,6 +46,11 @@ export default function AdminLogin() {
         setErrorMsg(result?.message || "Invalid administrative credentials.");
       }
     }
+  };
+
+  const handleQuickDemoFill = () => {
+    setValue("identifier", "admin@anupul.gov", { shouldValidate: true });
+    setValue("password", "admin123", { shouldValidate: true });
   };
 
   return (
@@ -69,9 +72,9 @@ export default function AdminLogin() {
         boxShadow: "0 20px 40px -15px rgba(0,0,0,0.5)",
         color: "#ffffff"
       }}>
-        {/* Back Link */}
+        {/* Top Back Link */}
         <Link
-          to="/login"
+          to="/"
           style={{
             display: "inline-flex",
             alignItems: "center",
@@ -79,43 +82,45 @@ export default function AdminLogin() {
             color: "#94a3b8",
             fontSize: "0.82rem",
             textDecoration: "none",
-            marginBottom: "1.5rem",
-            fontWeight: 600
+            marginBottom: "1.5rem"
           }}
         >
-          <ArrowLeft size={16} /> Return to Resident Portal
+          <ArrowLeft size={16} /> Back to Live Public Map
         </Link>
 
-        {/* Header Badge */}
+        {/* Header */}
         <div style={{ textAlign: "center", marginBottom: "1.75rem" }}>
           <div style={{
-            width: "56px",
-            height: "56px",
-            backgroundColor: "#ef4444",
-            borderRadius: "14px",
-            display: "flex",
+            display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
-            margin: "0 auto 1rem",
-            boxShadow: "0 8px 16px rgba(239, 68, 68, 0.3)"
+            width: "56px",
+            height: "56px",
+            borderRadius: "14px",
+            backgroundColor: "#ef4444",
+            color: "#ffffff",
+            marginBottom: "0.75rem",
+            boxShadow: "0 4px 15px rgba(239, 68, 68, 0.4)"
           }}>
-            <ShieldCheck size={32} color="#ffffff" />
+            <ShieldCheck size={32} />
           </div>
-          <h1 style={{ fontSize: "1.5rem", fontWeight: 800, margin: "0 0 0.25rem 0", letterSpacing: "-0.02em" }}>
-            ALERT0 OFFICIAL DESK
+          <h1 style={{ fontSize: "1.5rem", fontWeight: 800, margin: "0 0 0.35rem 0" }}>
+            Operations Command Desk
           </h1>
-          <p style={{ color: "#94a3b8", fontSize: "0.84rem", margin: 0 }}>
+          <p style={{ fontSize: "0.82rem", color: "#94a3b8", margin: "0 0 0.75rem 0" }}>
             Barangay Anupul • Bamban, Tarlac
           </p>
           <span style={{
             display: "inline-block",
-            marginTop: "0.5rem",
-            backgroundColor: "#1e293b",
-            color: "#cbd5e1",
-            padding: "0.2rem 0.6rem",
-            borderRadius: "9999px",
             fontSize: "0.72rem",
-            fontWeight: 700
+            fontWeight: 700,
+            color: "#ef4444",
+            backgroundColor: "rgba(239, 68, 68, 0.1)",
+            border: "1px solid rgba(239, 68, 68, 0.3)",
+            padding: "0.2rem 0.6rem",
+            borderRadius: "6px",
+            textTransform: "uppercase",
+            letterSpacing: "0.05em"
           }}>
             Restricted to Authorized Personnel Only
           </span>
@@ -139,8 +144,8 @@ export default function AdminLogin() {
           </div>
         )}
 
-        {/* Login Form */}
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+        {/* Login Form with React Hook Form + Zod */}
+        <form onSubmit={handleSubmit(onSubmit)} style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
           <div>
             <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, color: "#cbd5e1", marginBottom: "0.4rem" }}>
               Official Gov Email / Username
@@ -149,13 +154,12 @@ export default function AdminLogin() {
               <input
                 type="text"
                 placeholder="admin@anupul.gov"
-                value={identifier}
-                onChange={(e) => setIdentifier(e.target.value)}
+                {...register("identifier")}
                 style={{
                   width: "100%",
                   padding: "0.75rem 0.75rem 0.75rem 2.5rem",
                   backgroundColor: "#1e293b",
-                  border: "1px solid #334155",
+                  border: errors.identifier ? "1px solid #ef4444" : "1px solid #334155",
                   borderRadius: "10px",
                   color: "#ffffff",
                   fontSize: "0.9rem",
@@ -165,9 +169,19 @@ export default function AdminLogin() {
               />
               <Mail size={16} color="#64748b" style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)" }} />
             </div>
-            <span style={{ fontSize: "0.72rem", color: "#64748b", marginTop: "4px", display: "block" }}>
-              Quick Demo: admin@anupul.gov (Password: admin123)
-            </span>
+            {errors.identifier ? (
+              <span style={{ fontSize: "0.74rem", color: "#ef4444", marginTop: "4px", display: "block" }}>
+                {errors.identifier.message}
+              </span>
+            ) : (
+              <span
+                onClick={handleQuickDemoFill}
+                style={{ fontSize: "0.72rem", color: "#38bdf8", marginTop: "4px", display: "block", cursor: "pointer", textDecoration: "underline" }}
+                title="Click to auto-fill demo credentials"
+              >
+                Click to Auto-fill Demo: admin@anupul.gov / admin123
+              </span>
+            )}
           </div>
 
           <div>
@@ -178,13 +192,12 @@ export default function AdminLogin() {
               <input
                 type="password"
                 placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                {...register("password")}
                 style={{
                   width: "100%",
                   padding: "0.75rem 0.75rem 0.75rem 2.5rem",
                   backgroundColor: "#1e293b",
-                  border: "1px solid #334155",
+                  border: errors.password ? "1px solid #ef4444" : "1px solid #334155",
                   borderRadius: "10px",
                   color: "#ffffff",
                   fontSize: "0.9rem",
@@ -194,10 +207,16 @@ export default function AdminLogin() {
               />
               <Lock size={16} color="#64748b" style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)" }} />
             </div>
+            {errors.password && (
+              <span style={{ fontSize: "0.74rem", color: "#ef4444", marginTop: "4px", display: "block" }}>
+                {errors.password.message}
+              </span>
+            )}
           </div>
 
           <button
             type="submit"
+            disabled={isSubmitting}
             style={{
               padding: "0.85rem",
               backgroundColor: "#ef4444",
@@ -211,15 +230,15 @@ export default function AdminLogin() {
               transition: "background 0.2s ease"
             }}
           >
-            Authenticate & Open Operations Desk
+            {isSubmitting ? "Authenticating..." : "Authenticate & Open Operations Desk"}
           </button>
         </form>
 
         <div style={{ textAlign: "center", marginTop: "1.75rem", borderTop: "1px solid #1e293b", paddingTop: "1.25rem" }}>
           <p style={{ fontSize: "0.82rem", color: "#94a3b8", margin: 0 }}>
             New Barangay Official or Tanod Head?{" "}
-            <Link to="/admin/signup" style={{ color: "#f87171", fontWeight: 700, textDecoration: "none" }}>
-              Register Official Account
+            <Link to="/admin/signup" style={{ color: "#ef4444", fontWeight: 700, textDecoration: "none" }}>
+              Request Official Account
             </Link>
           </p>
         </div>

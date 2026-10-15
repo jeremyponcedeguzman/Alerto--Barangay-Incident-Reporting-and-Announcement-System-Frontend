@@ -1,64 +1,60 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useAuth, SITIO_LIST } from "../context/AuthContext";
 import { Radio, ShieldCheck, Mail, Lock, Phone, User, MapPin, Upload, AlertCircle, Eye, EyeOff } from "lucide-react";
+import { loginSchema, signupSchema } from "../schemas";
 
 export default function Login() {
   const navigate = useNavigate();
   const auth = useAuth() || {};
-  const { register, login } = auth;
+  const { register: authRegister, login } = auth;
 
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [authError, setAuthError] = useState("");
+  const [uploadedProofName, setUploadedProofName] = useState("");
 
-  const [loginData, setLoginData] = useState({
-    identifier: "",
-    password: "",
+  // 1. React Hook Form for Resident Login
+  const {
+    register: registerLogin,
+    handleSubmit: handleLoginSubmit,
+    setValue: setLoginValue,
+    formState: { errors: loginErrors },
+  } = useForm({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      identifier: "",
+      password: "",
+    },
   });
 
-  const [signupData, setSignupData] = useState({
-    firstName: "",
-    lastName: "",
-    contactNumber: "",
-    sitioAddress: "",
-    email: "",
-    password: "",
-    confirmPassword: "",
-    isAnupulResident: false,
-    proofOfResidencyName: "",
+  // 2. React Hook Form for Resident Registration
+  const {
+    register: registerSignup,
+    handleSubmit: handleSignupSubmit,
+    setValue: setSignupValue,
+    formState: { errors: signupErrors },
+  } = useForm({
+    resolver: zodResolver(signupSchema),
+    defaultValues: {
+      firstName: "",
+      lastName: "",
+      contactNumber: "",
+      sitioAddress: "",
+      email: "",
+      password: "",
+      confirmPassword: "",
+      isAnupulResident: false,
+      proofOfResidencyName: "",
+    },
   });
 
-  const [errors, setErrors] = useState({});
-
-  const handleSignupInputChange = (field, value) => {
-    setSignupData((prev) => ({ ...prev, [field]: value }));
-    if (errors[field]) {
-      setErrors((prev) => ({ ...prev, [field]: null }));
-    }
-  };
-
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setSignupData((prev) => ({
-        ...prev,
-        proofOfResidencyName: file.name,
-      }));
-    }
-  };
-
-  const handleLoginSubmit = async (e) => {
-    e.preventDefault();
+  const onLogin = async (data) => {
     setAuthError("");
-
-    if (!loginData.identifier.trim() || !loginData.password) {
-      setAuthError("Please fill in both email/phone and password.");
-      return;
-    }
-
     if (login) {
-      const result = await login(loginData.identifier, loginData.password);
+      const result = await login(data.identifier, data.password);
       if (result.success) {
         if (result.user?.role === "admin") {
           navigate("/admin-approvals");
@@ -76,51 +72,32 @@ export default function Login() {
     }
   };
 
-  const handleSignupSubmit = async (e) => {
-    e.preventDefault();
-    const newErrors = {};
-
-    if (!signupData.firstName.trim()) newErrors.firstName = "First name is required.";
-    if (!signupData.lastName.trim()) newErrors.lastName = "Last name is required.";
-    if (!signupData.contactNumber.trim()) newErrors.contactNumber = "Mobile number is required.";
-    if (!signupData.sitioAddress) newErrors.sitioAddress = "Please select your Sitio in Barangay Anupul.";
-    if (!signupData.email.trim()) newErrors.email = "Email address is required.";
-    if (!signupData.password || signupData.password.length < 6) {
-      newErrors.password = "Password must be at least 6 characters.";
-    }
-    if (signupData.password !== signupData.confirmPassword) {
-      newErrors.confirmPassword = "Passwords do not match.";
-    }
-    if (!signupData.isAnupulResident) {
-      newErrors.isAnupulResident = "You must confirm you are a bona fide resident of Barangay Anupul.";
-    }
-
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      return;
-    }
-
-    if (register) {
-      await register(signupData);
+  const onSignup = async (data) => {
+    if (authRegister) {
+      await authRegister(data);
       alert("Registration submitted! Your Barangay Anupul residency is awaiting verification.");
       setIsLogin(true);
-      setLoginData({
-        identifier: signupData.email,
-        password: signupData.password,
-      });
+      setLoginValue("identifier", data.email);
+      setLoginValue("password", data.password);
     }
   };
 
   const handleDemoResidentLogin = () => {
-    setLoginData({
-      identifier: "resident@gmail.com",
-      password: "resident123",
-    });
+    setLoginValue("identifier", "resident@gmail.com");
+    setLoginValue("password", "resident123");
     if (login) {
       const result = login("resident@gmail.com", "resident123");
       if (result.success) {
         navigate("/");
       }
+    }
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setUploadedProofName(file.name);
+      setSignupValue("proofOfResidencyName", file.name);
     }
   };
 
@@ -189,8 +166,8 @@ export default function Login() {
         )}
 
         {isLogin ? (
-          /* LOGIN FORM */
-          <form onSubmit={handleLoginSubmit} style={{ display: "flex", flexDirection: "column", gap: "1.2rem" }}>
+          /* LOGIN FORM WITH REACT HOOK FORM + ZOD */
+          <form onSubmit={handleLoginSubmit(onLogin)} style={{ display: "flex", flexDirection: "column", gap: "1.2rem" }}>
             <div>
               <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, color: "#334155", marginBottom: "0.4rem" }}>
                 Email or Mobile Number
@@ -198,13 +175,17 @@ export default function Login() {
               <div style={{ position: "relative" }}>
                 <input
                   type="text"
-                  placeholder="resident@gmail.com or 0917-123-4567"
-                  value={loginData.identifier}
-                  onChange={(e) => setLoginData({ ...loginData, identifier: e.target.value })}
-                  style={{ width: "100%", padding: "0.75rem 0.75rem 0.75rem 2.4rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.88rem", boxSizing: "border-box" }}
+                  placeholder="resident@gmail.com or 09171234567"
+                  {...registerLogin("identifier")}
+                  style={{ width: "100%", padding: "0.75rem 0.75rem 0.75rem 2.4rem", borderRadius: "8px", border: loginErrors.identifier ? "1px solid #ef4444" : "1px solid #cbd5e1", fontSize: "0.88rem", boxSizing: "border-box" }}
                 />
                 <Mail size={16} color="#94a3b8" style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)" }} />
               </div>
+              {loginErrors.identifier && (
+                <span style={{ color: "#ef4444", fontSize: "0.74rem", marginTop: "4px", display: "block" }}>
+                  {loginErrors.identifier.message}
+                </span>
+              )}
             </div>
 
             <div>
@@ -215,9 +196,8 @@ export default function Login() {
                 <input
                   type={showPassword ? "text" : "password"}
                   placeholder="••••••••"
-                  value={loginData.password}
-                  onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
-                  style={{ width: "100%", padding: "0.75rem 2.4rem 0.75rem 2.4rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.88rem", boxSizing: "border-box" }}
+                  {...registerLogin("password")}
+                  style={{ width: "100%", padding: "0.75rem 2.4rem 0.75rem 2.4rem", borderRadius: "8px", border: loginErrors.password ? "1px solid #ef4444" : "1px solid #cbd5e1", fontSize: "0.88rem", boxSizing: "border-box" }}
                 />
                 <Lock size={16} color="#94a3b8" style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)" }} />
                 <button
@@ -228,6 +208,11 @@ export default function Login() {
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
+              {loginErrors.password && (
+                <span style={{ color: "#ef4444", fontSize: "0.74rem", marginTop: "4px", display: "block" }}>
+                  {loginErrors.password.message}
+                </span>
+              )}
             </div>
 
             <button
@@ -247,19 +232,18 @@ export default function Login() {
             </button>
           </form>
         ) : (
-          /* SIGNUP FORM */
-          <form onSubmit={handleSignupSubmit} style={{ display: "flex", flexDirection: "column", gap: "0.9rem" }}>
+          /* SIGNUP FORM WITH REACT HOOK FORM + ZOD */
+          <form onSubmit={handleSignupSubmit(onSignup)} style={{ display: "flex", flexDirection: "column", gap: "0.9rem" }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
               <div>
                 <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#334155", marginBottom: "0.3rem" }}>First Name</label>
                 <input
                   type="text"
                   placeholder="Juan"
-                  value={signupData.firstName}
-                  onChange={(e) => handleSignupInputChange("firstName", e.target.value)}
-                  style={{ width: "100%", padding: "0.65rem", borderRadius: "8px", border: errors.firstName ? "1px solid #ef4444" : "1px solid #cbd5e1", fontSize: "0.85rem", boxSizing: "border-box" }}
+                  {...registerSignup("firstName")}
+                  style={{ width: "100%", padding: "0.65rem", borderRadius: "8px", border: signupErrors.firstName ? "1px solid #ef4444" : "1px solid #cbd5e1", fontSize: "0.85rem", boxSizing: "border-box" }}
                 />
-                {errors.firstName && <span style={{ color: "#ef4444", fontSize: "0.7rem" }}>{errors.firstName}</span>}
+                {signupErrors.firstName && <span style={{ color: "#ef4444", fontSize: "0.7rem" }}>{signupErrors.firstName.message}</span>}
               </div>
 
               <div>
@@ -267,27 +251,25 @@ export default function Login() {
                 <input
                   type="text"
                   placeholder="Dela Cruz"
-                  value={signupData.lastName}
-                  onChange={(e) => handleSignupInputChange("lastName", e.target.value)}
-                  style={{ width: "100%", padding: "0.65rem", borderRadius: "8px", border: errors.lastName ? "1px solid #ef4444" : "1px solid #cbd5e1", fontSize: "0.85rem", boxSizing: "border-box" }}
+                  {...registerSignup("lastName")}
+                  style={{ width: "100%", padding: "0.65rem", borderRadius: "8px", border: signupErrors.lastName ? "1px solid #ef4444" : "1px solid #cbd5e1", fontSize: "0.85rem", boxSizing: "border-box" }}
                 />
-                {errors.lastName && <span style={{ color: "#ef4444", fontSize: "0.7rem" }}>{errors.lastName}</span>}
+                {signupErrors.lastName && <span style={{ color: "#ef4444", fontSize: "0.7rem" }}>{signupErrors.lastName.message}</span>}
               </div>
             </div>
 
             <div>
               <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#334155", marginBottom: "0.3rem" }}>Sitio / Sector (Barangay Anupul)</label>
               <select
-                value={signupData.sitioAddress}
-                onChange={(e) => handleSignupInputChange("sitioAddress", e.target.value)}
-                style={{ width: "100%", padding: "0.65rem", borderRadius: "8px", border: errors.sitioAddress ? "1px solid #ef4444" : "1px solid #cbd5e1", fontSize: "0.85rem", boxSizing: "border-box" }}
+                {...registerSignup("sitioAddress")}
+                style={{ width: "100%", padding: "0.65rem", borderRadius: "8px", border: signupErrors.sitioAddress ? "1px solid #ef4444" : "1px solid #cbd5e1", fontSize: "0.85rem", boxSizing: "border-box" }}
               >
                 <option value="">Select your Sitio address...</option>
                 {SITIO_LIST.map((sitio) => (
                   <option key={sitio} value={sitio}>{sitio}</option>
                 ))}
               </select>
-              {errors.sitioAddress && <span style={{ color: "#ef4444", fontSize: "0.7rem" }}>{errors.sitioAddress}</span>}
+              {signupErrors.sitioAddress && <span style={{ color: "#ef4444", fontSize: "0.7rem" }}>{signupErrors.sitioAddress.message}</span>}
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
@@ -296,11 +278,10 @@ export default function Login() {
                 <input
                   type="text"
                   placeholder="0917-123-4567"
-                  value={signupData.contactNumber}
-                  onChange={(e) => handleSignupInputChange("contactNumber", e.target.value)}
-                  style={{ width: "100%", padding: "0.65rem", borderRadius: "8px", border: errors.contactNumber ? "1px solid #ef4444" : "1px solid #cbd5e1", fontSize: "0.85rem", boxSizing: "border-box" }}
+                  {...registerSignup("contactNumber")}
+                  style={{ width: "100%", padding: "0.65rem", borderRadius: "8px", border: signupErrors.contactNumber ? "1px solid #ef4444" : "1px solid #cbd5e1", fontSize: "0.85rem", boxSizing: "border-box" }}
                 />
-                {errors.contactNumber && <span style={{ color: "#ef4444", fontSize: "0.7rem" }}>{errors.contactNumber}</span>}
+                {signupErrors.contactNumber && <span style={{ color: "#ef4444", fontSize: "0.7rem" }}>{signupErrors.contactNumber.message}</span>}
               </div>
 
               <div>
@@ -308,11 +289,10 @@ export default function Login() {
                 <input
                   type="email"
                   placeholder="resident@gmail.com"
-                  value={signupData.email}
-                  onChange={(e) => handleSignupInputChange("email", e.target.value)}
-                  style={{ width: "100%", padding: "0.65rem", borderRadius: "8px", border: errors.email ? "1px solid #ef4444" : "1px solid #cbd5e1", fontSize: "0.85rem", boxSizing: "border-box" }}
+                  {...registerSignup("email")}
+                  style={{ width: "100%", padding: "0.65rem", borderRadius: "8px", border: signupErrors.email ? "1px solid #ef4444" : "1px solid #cbd5e1", fontSize: "0.85rem", boxSizing: "border-box" }}
                 />
-                {errors.email && <span style={{ color: "#ef4444", fontSize: "0.7rem" }}>{errors.email}</span>}
+                {signupErrors.email && <span style={{ color: "#ef4444", fontSize: "0.7rem" }}>{signupErrors.email.message}</span>}
               </div>
             </div>
 
@@ -323,6 +303,11 @@ export default function Login() {
                 onChange={handleFileChange}
                 style={{ width: "100%", padding: "0.5rem", borderRadius: "8px", border: "1px dashed #cbd5e1", fontSize: "0.8rem", boxSizing: "border-box" }}
               />
+              {uploadedProofName && (
+                <span style={{ fontSize: "0.74rem", color: "#059669", display: "block", marginTop: "3px" }}>
+                  Selected: {uploadedProofName}
+                </span>
+              )}
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
@@ -331,11 +316,10 @@ export default function Login() {
                 <input
                   type="password"
                   placeholder="••••••••"
-                  value={signupData.password}
-                  onChange={(e) => handleSignupInputChange("password", e.target.value)}
-                  style={{ width: "100%", padding: "0.65rem", borderRadius: "8px", border: errors.password ? "1px solid #ef4444" : "1px solid #cbd5e1", fontSize: "0.85rem", boxSizing: "border-box" }}
+                  {...registerSignup("password")}
+                  style={{ width: "100%", padding: "0.65rem", borderRadius: "8px", border: signupErrors.password ? "1px solid #ef4444" : "1px solid #cbd5e1", fontSize: "0.85rem", boxSizing: "border-box" }}
                 />
-                {errors.password && <span style={{ color: "#ef4444", fontSize: "0.7rem" }}>{errors.password}</span>}
+                {signupErrors.password && <span style={{ color: "#ef4444", fontSize: "0.7rem" }}>{signupErrors.password.message}</span>}
               </div>
 
               <div>
@@ -343,11 +327,10 @@ export default function Login() {
                 <input
                   type="password"
                   placeholder="••••••••"
-                  value={signupData.confirmPassword}
-                  onChange={(e) => handleSignupInputChange("confirmPassword", e.target.value)}
-                  style={{ width: "100%", padding: "0.65rem", borderRadius: "8px", border: errors.confirmPassword ? "1px solid #ef4444" : "1px solid #cbd5e1", fontSize: "0.85rem", boxSizing: "border-box" }}
+                  {...registerSignup("confirmPassword")}
+                  style={{ width: "100%", padding: "0.65rem", borderRadius: "8px", border: signupErrors.confirmPassword ? "1px solid #ef4444" : "1px solid #cbd5e1", fontSize: "0.85rem", boxSizing: "border-box" }}
                 />
-                {errors.confirmPassword && <span style={{ color: "#ef4444", fontSize: "0.7rem" }}>{errors.confirmPassword}</span>}
+                {signupErrors.confirmPassword && <span style={{ color: "#ef4444", fontSize: "0.7rem" }}>{signupErrors.confirmPassword.message}</span>}
               </div>
             </div>
 
@@ -355,15 +338,14 @@ export default function Login() {
               <input
                 type="checkbox"
                 id="isAnupulResident"
-                checked={signupData.isAnupulResident}
-                onChange={(e) => handleSignupInputChange("isAnupulResident", e.target.checked)}
+                {...registerSignup("isAnupulResident")}
                 style={{ marginTop: "3px" }}
               />
               <label htmlFor="isAnupulResident" style={{ fontSize: "0.78rem", color: "#475569" }}>
                 I certify under oath that I am an actual resident of Barangay Anupul, Bamban, Tarlac.
               </label>
             </div>
-            {errors.isAnupulResident && <span style={{ color: "#ef4444", fontSize: "0.7rem" }}>{errors.isAnupulResident}</span>}
+            {signupErrors.isAnupulResident && <span style={{ color: "#ef4444", fontSize: "0.7rem" }}>{signupErrors.isAnupulResident.message}</span>}
 
             <button
               type="submit"

@@ -17,7 +17,7 @@ import {
 import { useIncidents, INCIDENT_CATEGORIES } from "../context/IncidentContext";
 
 export default function MyReports() {
-  const { userReports, updateIncidentStatus } = useIncidents();
+  const { userReports, updateIncidentStatus, canUserResolveIncident } = useIncidents();
   const [statusFilter, setStatusFilter] = useState("all");
 
   const filteredReports = userReports.filter((report) => {
@@ -234,22 +234,24 @@ export default function MyReports() {
                     </div>
 
                     <div className="report-card-actions">
-                      <button
-                        className="btn-card-status-toggle"
-                        onClick={() =>
-                          updateIncidentStatus(
-                            report.id,
-                            report.status === "Resolved"
-                              ? "In Progress"
-                              : "Resolved"
-                          )
-                        }
-                      >
-                        <RotateCcw size={14} />
-                        {report.status === "Resolved"
-                          ? "Reopen Report"
-                          : "Mark Resolved"}
-                      </button>
+                      {canUserResolveIncident && canUserResolveIncident(report) && (
+                        <button
+                          className="btn-card-status-toggle"
+                          onClick={() =>
+                            updateIncidentStatus(
+                              report.id,
+                              report.status === "Resolved"
+                                ? "In Progress"
+                                : "Resolved"
+                            )
+                          }
+                        >
+                          <RotateCcw size={14} />
+                          {report.status === "Resolved"
+                            ? "Reopen Report"
+                            : "Mark Resolved"}
+                        </button>
+                      )}
 
                       <Link
                         to={`/report-incident?edit=${report.id}`}

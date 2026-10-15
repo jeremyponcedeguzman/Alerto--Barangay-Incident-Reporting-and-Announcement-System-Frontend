@@ -354,30 +354,32 @@ export default function Navbar() {
         </div>
       )}
     </header>
-      {!isDbOnline && (
-        <div
-          className="db-offline-warning-bar"
-          style={{
-            backgroundColor: "#fef2f2",
-            borderBottom: "1px solid #fecaca",
-            color: "#991b1b",
-            padding: "0.55rem 1.25rem",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "0.5rem",
-            fontSize: "0.82rem",
-            fontWeight: 600,
-            textAlign: "center",
-            zIndex: 900,
-          }}
-        >
-          <AlertTriangle size={15} style={{ flexShrink: 0, color: "#dc2626" }} />
-          <span>
-            <strong>MongoDB Database Unavailable:</strong> Backend database connection is offline. Showing local standby data.
-          </span>
-        </div>
-      )}
-    </>
+
+    {!isDbOnline && (
+      <div
+        className="db-offline-warning-bar"
+        style={{
+          backgroundColor: "#fef2f2",
+          borderBottom: "1px solid #fecaca",
+          color: "#991b1b",
+          padding: "0.55rem 1.25rem",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "0.5rem",
+          fontSize: "0.82rem",
+          fontWeight: 600,
+          textAlign: "center",
+          zIndex: 900,
+        }}
+      >
+        <AlertTriangle size={15} style={{ flexShrink: 0, color: "#dc2626" }} />
+        <span>
+          <strong>MongoDB Database Unavailable:</strong> Backend database connection is offline. Showing local standby data.
+        </span>
+      </div>
+    )}
+  </>
   );
 }
+

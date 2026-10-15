@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import L from "leaflet";
 import {
   AlertTriangle,
@@ -16,7 +18,6 @@ import {
   ArrowLeft,
   Info,
   Clock,
-  Sparkles,
   Send,
   RefreshCw,
   X
@@ -27,6 +28,7 @@ import {
   BARANGAY_CENTER
 } from "../context/IncidentContext";
 import { createDraftLocationIcon } from "../utils/mapIcons";
+import { incidentReportSchema } from "../schemas";
 
 export default function ReportIncident() {
   const navigate = useNavigate();
@@ -42,17 +44,9 @@ export default function ReportIncident() {
 
   const isUnauthorizedEdit = existingIncident && canUserEditIncident && !canUserEditIncident(existingIncident);
 
-  const [category, setCategory] = useState("flood");
-  const [severity, setSeverity] = useState("high");
-  const [title, setTitle] = useState("");
-  const [locationName, setLocationName] = useState("");
-  const [description, setDescription] = useState("");
-  
   const reportedBy = currentUser?.name || (currentUser?.firstName ? `${currentUser.firstName} ${currentUser.lastName}` : "Juan Dela Cruz");
   const phone = currentUser?.phone || currentUser?.contactNumber || "0917-123-4567";
-  
-  const [lat, setLat] = useState(BARANGAY_CENTER.lat + 0.002);
-  const [lng, setLng] = useState(BARANGAY_CENTER.lng + 0.001);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittedSuccess, setSubmittedSuccess] = useState(false);
 
@@ -68,25 +62,61 @@ export default function ReportIncident() {
   const miniMapInstanceRef = useRef(null);
   const draftMarkerRef = useRef(null);
 
+  // React Hook Form + Zod Resolver
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    reset,
+    formState: { errors },
+  } = useForm({
+    resolver: zodResolver(incidentReportSchema),
+    defaultValues: {
+      category: "flood",
+      severity: "high",
+      title: "",
+      locationName: "",
+      lat: BARANGAY_CENTER.lat + 0.002,
+      lng: BARANGAY_CENTER.lng + 0.001,
+      description: "",
+      reportedBy,
+      reporterContact: phone,
+      imageEvidence: "",
+    },
+  });
+
+  const category = watch("category");
+  const severity = watch("severity");
+  const lat = watch("lat");
+  const lng = watch("lng");
+
   // Pre-fill form when editing an existing incident
   useEffect(() => {
     if (existingIncident) {
-      if (existingIncident.title) setTitle(existingIncident.title);
-      if (existingIncident.category) setCategory(existingIncident.category);
-      if (existingIncident.severity) setSeverity(existingIncident.severity);
-      if (existingIncident.locationName) setLocationName(existingIncident.locationName);
-      if (existingIncident.description) setDescription(existingIncident.description);
-      if (existingIncident.lat && existingIncident.lng) {
-        setLat(existingIncident.lat);
-        setLng(existingIncident.lng);
-        if (miniMapInstanceRef.current && draftMarkerRef.current) {
-          miniMapInstanceRef.current.setView([existingIncident.lat, existingIncident.lng], 16);
-          draftMarkerRef.current.setLatLng([existingIncident.lat, existingIncident.lng]);
-        }
+      reset({
+        category: existingIncident.category || "flood",
+        severity: existingIncident.severity || "high",
+        title: existingIncident.title || "",
+        locationName: existingIncident.locationName || "",
+        lat: existingIncident.lat || (BARANGAY_CENTER.lat + 0.002),
+        lng: existingIncident.lng || (BARANGAY_CENTER.lng + 0.001),
+        description: existingIncident.description || "",
+        reportedBy: existingIncident.reportedBy || reportedBy,
+        reporterContact: existingIncident.reporterContact || phone,
+        imageEvidence: existingIncident.imageEvidence || "",
+      });
+
+      if (existingIncident.imageEvidence) {
+        setCapturedImage(existingIncident.imageEvidence);
       }
-      if (existingIncident.imageEvidence) setCapturedImage(existingIncident.imageEvidence);
+
+      if (existingIncident.lat && existingIncident.lng && miniMapInstanceRef.current && draftMarkerRef.current) {
+        miniMapInstanceRef.current.setView([existingIncident.lat, existingIncident.lng], 16);
+        draftMarkerRef.current.setLatLng([existingIncident.lat, existingIncident.lng]);
+      }
     }
-  }, [existingIncident]);
+  }, [existingIncident, reset, reportedBy, phone]);
 
   // Open live webcam / hardware camera stream
   const handleOpenLiveCamera = async () => {
@@ -108,7 +138,6 @@ export default function ReportIncident() {
     }
   };
 
-  // Close live camera stream
   const handleCloseCamera = () => {
     if (mediaStreamRef.current) {
       mediaStreamRef.current.getTracks().forEach((track) => track.stop());
@@ -117,22 +146,34 @@ export default function ReportIncident() {
     setIsCameraOpen(false);
   };
 
-  // Take snapshot from active live stream
   const handleCaptureSnapshot = () => {
-    if (videoRef.current && canvasRef.current) {
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      canvas.width = video.videoWidth || 640;
-      canvas.height = video.videoHeight || 480;
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const dataUrl = canvas.toDataURL("image/jpeg");
-      setCapturedImage(dataUrl);
-      handleCloseCamera();
-    }
+    if (!videoRef.current || !canvasRef.current) return;
+
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    // Watermark with timestamp and Barangay location to prove authenticity
+    ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+    ctx.fillRect(0, canvas.height - 40, canvas.width, 40);
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 13px sans-serif";
+    ctx.fillText(
+      `ALERTO LIVE VERIFIED SNAPSHOT • ${new Date().toLocaleString()} • BRGY. ANUPUL`,
+      12,
+      canvas.height - 15
+    );
+
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+    setCapturedImage(dataUrl);
+    setValue("imageEvidence", dataUrl, { shouldValidate: true });
+    handleCloseCamera();
   };
 
-  // Cleanup stream on component unmount
   useEffect(() => {
     return () => {
       if (mediaStreamRef.current) {
@@ -141,133 +182,114 @@ export default function ReportIncident() {
     };
   }, []);
 
-  // Sync videoRef stream if opened
-  useEffect(() => {
-    if (isCameraOpen && mediaStreamRef.current && videoRef.current) {
-      videoRef.current.srcObject = mediaStreamRef.current;
-    }
-  }, [isCameraOpen]);
-
-  // Initialize mini picker map
+  // Initialize interactive Leaflet mini-map picker
   useEffect(() => {
     if (!miniMapContainerRef.current) return;
+    if (miniMapInstanceRef.current) return;
 
-    if (miniMapInstanceRef.current) {
-      miniMapInstanceRef.current.remove();
-      miniMapInstanceRef.current = null;
-    }
-    if (miniMapContainerRef.current._leaflet_id) {
-      delete miniMapContainerRef.current._leaflet_id;
-    }
+    const initialLat = existingIncident?.lat || (BARANGAY_CENTER.lat + 0.002);
+    const initialLng = existingIncident?.lng || (BARANGAY_CENTER.lng + 0.001);
 
     const map = L.map(miniMapContainerRef.current, {
-      center: [lat, lng],
+      center: [initialLat, initialLng],
       zoom: 16,
-      zoomControl: false,
+      zoomControl: true,
       attributionControl: false,
     });
 
-    L.control.zoom({ position: "bottomright" }).addTo(map);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+    }).addTo(map);
 
-    L.tileLayer(
-      "https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}",
-      {
-        subdomains: "0123",
-        maxZoom: 20,
-      }
-    ).addTo(map);
-
-    const draftIcon = createDraftLocationIcon(category);
-    const marker = L.marker([lat, lng], {
+    const draftIcon = createDraftLocationIcon();
+    const marker = L.marker([initialLat, initialLng], {
       icon: draftIcon,
       draggable: true,
     }).addTo(map);
 
-    marker.on("dragend", function (e) {
-      const newPos = e.target.getLatLng();
-      setLat(Number(newPos.lat.toFixed(5)));
-      setLng(Number(newPos.lng.toFixed(5)));
+    marker.bindPopup("<b>Selected Incident Spot</b><br/>Drag pin or click map to move.").openPopup();
+
+    marker.on("dragend", (e) => {
+      const position = e.target.getLatLng();
+      const newLat = parseFloat(position.lat.toFixed(5));
+      const newLng = parseFloat(position.lng.toFixed(5));
+      setValue("lat", newLat, { shouldValidate: true });
+      setValue("lng", newLng, { shouldValidate: true });
     });
 
-    map.on("click", function (e) {
-      marker.setLatLng(e.latlng);
-      setLat(Number(e.latlng.lat.toFixed(5)));
-      setLng(Number(e.latlng.lng.toFixed(5)));
+    map.on("click", (e) => {
+      const newLat = parseFloat(e.latlng.lat.toFixed(5));
+      const newLng = parseFloat(e.latlng.lng.toFixed(5));
+      setValue("lat", newLat, { shouldValidate: true });
+      setValue("lng", newLng, { shouldValidate: true });
+      marker.setLatLng([newLat, newLng]);
+      marker.openPopup();
     });
 
     miniMapInstanceRef.current = map;
     draftMarkerRef.current = marker;
 
+    const timer = setTimeout(() => {
+      map.invalidateSize();
+    }, 250);
+
     return () => {
-      if (miniMapInstanceRef.current) {
-        miniMapInstanceRef.current.remove();
-        miniMapInstanceRef.current = null;
-      }
+      clearTimeout(timer);
+      map.remove();
+      miniMapInstanceRef.current = null;
+      draftMarkerRef.current = null;
     };
-  }, []);
+  }, [existingIncident, setValue]);
 
-  // Update marker icon when category changes
-  useEffect(() => {
-    if (draftMarkerRef.current) {
-      const updatedIcon = createDraftLocationIcon(category);
-      draftMarkerRef.current.setIcon(updatedIcon);
-    }
-  }, [category]);
-
-  const categoryObj = INCIDENT_CATEGORIES[category] || INCIDENT_CATEGORIES.flood;
-
+  // Handle "Use My Current Location" button
   const handleUseMyCurrentLocation = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const newLat = Number(pos.coords.latitude.toFixed(5));
-          const newLng = Number(pos.coords.longitude.toFixed(5));
-          setLat(newLat);
-          setLng(newLng);
-          if (miniMapInstanceRef.current && draftMarkerRef.current) {
-            miniMapInstanceRef.current.flyTo([newLat, newLng], 17);
-            draftMarkerRef.current.setLatLng([newLat, newLng]);
-          }
-        },
-        () => {
-          const offsetLat = Number((BARANGAY_CENTER.lat + (Math.random() - 0.5) * 0.005).toFixed(5));
-          const offsetLng = Number((BARANGAY_CENTER.lng + (Math.random() - 0.5) * 0.005).toFixed(5));
-          setLat(offsetLat);
-          setLng(offsetLng);
-          if (miniMapInstanceRef.current && draftMarkerRef.current) {
-            miniMapInstanceRef.current.flyTo([offsetLat, offsetLng], 16);
-            draftMarkerRef.current.setLatLng([offsetLat, offsetLng]);
-          }
-        }
-      );
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!title.trim() || !locationName.trim() || !description.trim()) {
-      alert("Please fill in all required fields before submitting.");
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser.");
       return;
     }
 
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const userLat = parseFloat(pos.coords.latitude.toFixed(5));
+        const userLng = parseFloat(pos.coords.longitude.toFixed(5));
+
+        setValue("lat", userLat, { shouldValidate: true });
+        setValue("lng", userLng, { shouldValidate: true });
+
+        if (miniMapInstanceRef.current && draftMarkerRef.current) {
+          miniMapInstanceRef.current.setView([userLat, userLng], 17);
+          draftMarkerRef.current.setLatLng([userLat, userLng]);
+          draftMarkerRef.current.setPopupContent("<b>Your Device GPS Location</b>").openPopup();
+        }
+      },
+      (err) => {
+        console.warn("Geolocation warning:", err.message);
+        alert("Could not retrieve GPS coordinates. Defaulting to Barangay Anupul center.");
+      },
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  };
+
+  // Form submit handler with React Hook Form + Zod
+  const onFormSubmit = async (formData) => {
     if (!capturedImage) {
       alert("Please capture real-time live camera photo evidence before submitting. Gallery uploads are disabled to prevent fake reports.");
       return;
     }
 
     setIsSubmitting(true);
+    const categoryObj = INCIDENT_CATEGORIES[formData.category] || INCIDENT_CATEGORIES.flood;
 
     try {
       if (editId) {
-        // Update the existing incident report instead of creating a duplicate
         await updateIncident(editId, {
-          title,
-          category,
-          severity,
-          locationName,
-          lat,
-          lng,
-          description,
+          title: formData.title,
+          category: formData.category,
+          severity: formData.severity,
+          locationName: formData.locationName,
+          lat: formData.lat,
+          lng: formData.lng,
+          description: formData.description,
           imageEvidence: capturedImage,
           responder: categoryObj.responder,
         });
@@ -281,16 +303,15 @@ export default function ReportIncident() {
         return;
       }
 
-      // Create brand new incident
       const newInc = await addIncident({
-        title,
-        category,
-        severity,
-        locationName,
-        lat,
-        lng,
+        title: formData.title,
+        category: formData.category,
+        severity: formData.severity,
+        locationName: formData.locationName,
+        lat: formData.lat,
+        lng: formData.lng,
         reportedBy,
-        description,
+        description: formData.description,
         imageEvidence: capturedImage,
         responder: categoryObj.responder,
       });
@@ -396,7 +417,7 @@ export default function ReportIncident() {
               </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="report-form">
+            <form onSubmit={handleSubmit(onFormSubmit)} className="report-form">
               {/* 1. Incident Category Selection */}
               <div className="form-section">
                 <label className="input-label">
@@ -411,7 +432,7 @@ export default function ReportIncident() {
                       key={cat.id}
                       type="button"
                       className={`cat-choice-btn ${category === cat.id ? "selected" : ""}`}
-                      onClick={() => setCategory(cat.id)}
+                      onClick={() => setValue("category", cat.id, { shouldValidate: true })}
                       style={{
                         borderColor: category === cat.id ? cat.color : "#e2e8f0",
                         backgroundColor: category === cat.id ? cat.bgLight : "#ffffff",
@@ -430,6 +451,11 @@ export default function ReportIncident() {
                     </button>
                   ))}
                 </div>
+                {errors.category && (
+                  <span style={{ color: "#dc2626", fontSize: "0.8rem", marginTop: "4px", display: "block" }}>
+                    {errors.category.message}
+                  </span>
+                )}
               </div>
 
               {/* 2. Severity Level */}
@@ -454,10 +480,8 @@ export default function ReportIncident() {
                     >
                       <input
                         type="radio"
-                        name="severity"
                         value={sev.id}
-                        checked={severity === sev.id}
-                        onChange={(e) => setSeverity(e.target.value)}
+                        {...register("severity")}
                         className="sr-only"
                       />
                       <span className="sev-dot" style={{ backgroundColor: sev.color }}></span>
@@ -467,6 +491,11 @@ export default function ReportIncident() {
                     </label>
                   ))}
                 </div>
+                {errors.severity && (
+                  <span style={{ color: "#dc2626", fontSize: "0.8rem", marginTop: "4px", display: "block" }}>
+                    {errors.severity.message}
+                  </span>
+                )}
               </div>
 
               {/* 3. Title / Headline */}
@@ -477,12 +506,15 @@ export default function ReportIncident() {
                 <input
                   id="incident-title"
                   type="text"
-                  required
                   placeholder="e.g., Severe gutter flooding blocking street access"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
+                  {...register("title")}
                   className="form-input"
                 />
+                {errors.title && (
+                  <span style={{ color: "#dc2626", fontSize: "0.8rem", marginTop: "4px", display: "block" }}>
+                    {errors.title.message}
+                  </span>
+                )}
               </div>
 
               {/* 4. Location Name & Interactive Map Coordinates */}
@@ -493,12 +525,15 @@ export default function ReportIncident() {
                 <input
                   id="location-name"
                   type="text"
-                  required
                   placeholder="e.g., Kamagong St. cor. Bagtikan St., Sitio Centro"
-                  value={locationName}
-                  onChange={(e) => setLocationName(e.target.value)}
+                  {...register("locationName")}
                   className="form-input"
                 />
+                {errors.locationName && (
+                  <span style={{ color: "#dc2626", fontSize: "0.8rem", marginTop: "4px", display: "block" }}>
+                    {errors.locationName.message}
+                  </span>
+                )}
               </div>
 
               {/* Mini Map Location Picker */}
@@ -524,7 +559,7 @@ export default function ReportIncident() {
                 </div>
               </div>
 
-              {/* 5. Real-Time Live Camera Evidence Upload (Anti-Troll / Gallery Blocked) */}
+              {/* 5. Real-Time Live Camera Evidence Upload */}
               <div className="form-section" style={{ background: "#f8fafc", border: "2px dashed #f43f5e", padding: "1.25rem", borderRadius: "1rem", marginBottom: "1.5rem" }}>
                 <div style={{ marginBottom: "0.75rem" }}>
                   <label className="input-label" style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.95rem", fontWeight: "700", color: "#e11d48" }}>
@@ -549,6 +584,7 @@ export default function ReportIncident() {
                       type="button"
                       onClick={() => {
                         setCapturedImage(null);
+                        setValue("imageEvidence", "");
                         handleOpenLiveCamera();
                       }}
                       style={{ position: "absolute", top: "10px", right: "10px", background: "rgba(0,0,0,0.85)", color: "#fff", border: "none", padding: "8px 12px", borderRadius: "8px", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px", fontSize: "0.78rem", fontWeight: "600" }}
@@ -607,12 +643,15 @@ export default function ReportIncident() {
                 <textarea
                   id="incident-desc"
                   rows={4}
-                  required
                   placeholder="Describe what happened, any persons involved or injured, visible hazards, or instructions for responding units..."
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
+                  {...register("description")}
                   className="form-textarea"
                 />
+                {errors.description && (
+                  <span style={{ color: "#dc2626", fontSize: "0.8rem", marginTop: "4px", display: "block" }}>
+                    {errors.description.message}
+                  </span>
+                )}
               </div>
 
               {/* 7. Reporter Information (Pre-filled & Uneditable for Logged-In User) */}

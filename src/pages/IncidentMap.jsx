@@ -62,6 +62,7 @@ export default function IncidentMap() {
     clusterThreshold,
     updateIncidentStatus,
     canUserEditIncident,
+    canUserResolveIncident,
   } = useIncidents();
 
   const mapContainerRef = useRef(null);
@@ -759,22 +760,46 @@ export default function IncidentMap() {
                           onClick={(e) => e.stopPropagation()}
                         >
                           <div className="action-buttons-group">
-                            <button
-                              className="btn-status-action"
-                              onClick={() =>
-                                updateIncidentStatus(
-                                  incident.id,
-                                  incident.status === "Resolved"
-                                    ? "In Progress"
-                                    : "Resolved"
-                                )
-                              }
-                            >
-                              <CheckCircle2 size={14} />
-                              {incident.status === "Resolved"
-                                ? "Reopen Report"
-                                : "Mark as Resolved"}
-                            </button>
+                            {canUserResolveIncident && canUserResolveIncident(incident) ? (
+                              <button
+                                className="btn-status-action"
+                                onClick={() =>
+                                  updateIncidentStatus(
+                                    incident.id,
+                                    incident.status === "Resolved"
+                                      ? "In Progress"
+                                      : "Resolved"
+                                  )
+                                }
+                              >
+                                <CheckCircle2 size={14} />
+                                {incident.status === "Resolved"
+                                  ? "Reopen Report"
+                                  : "Mark as Resolved"}
+                              </button>
+                            ) : (
+                              <div
+                                style={{
+                                  fontSize: "0.78rem",
+                                  fontWeight: 600,
+                                  color: "#64748b",
+                                  padding: "0.35rem 0.65rem",
+                                  backgroundColor: "#f1f5f9",
+                                  borderRadius: "6px",
+                                  border: "1px solid #e2e8f0",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "5px"
+                                }}
+                              >
+                                <ShieldCheck size={13} style={{ color: "#2563eb" }} />
+                                <span>
+                                  {incident.status === "Resolved"
+                                    ? "Resolved & Cleared"
+                                    : `Dispatched: ${incident.responder || "Pending Unit"}`}
+                                </span>
+                              </div>
+                            )}
                             {canUserEditIncident && canUserEditIncident(incident) && (
                               <Link
                                 to={`/report-incident?edit=${incident.id}`}

@@ -18,6 +18,16 @@ export const SITIO_LIST = [
 ];
 
 /**
+ * Checks whether an email is already registered in the user database.
+ */
+export function isEmailAlreadyRegistered(email, userDb = []) {
+  if (!email || typeof email !== "string") return false;
+  const clean = email.trim().toLowerCase();
+  if (!clean) return false;
+  return Array.isArray(userDb) && userDb.some((u) => (u?.email || "").trim().toLowerCase() === clean);
+}
+
+/**
  * Generates an authentic SVG data URI of a Barangay Residency Clearance Certificate
  * for realistic inspection by Barangay Captains and Officials.
  */
@@ -314,13 +324,58 @@ export function AuthProvider({ children }) {
   }, [refreshUsersFromBackend]);
 
   const register = async (userData) => {
+    const cleanEmail = (userData.email || "").trim().toLowerCase();
+
+    // 1. Verify uniqueness against local database
+    if (cleanEmail) {
+      const existing = (userDatabase || []).find(
+        (u) => (u.email || "").trim().toLowerCase() === cleanEmail
+      );
+      if (existing) {
+        return {
+          success: false,
+          message: "An account with this email address already exists. Please sign in or use a different email.",
+        };
+      }
+    }
+
     const fullName = `${userData.firstName} ${userData.lastName}`.trim();
     const proofUrl = userData.proofOfResidencyUrl || generateSampleCertificate(fullName, userData.sitioAddress || "Sitio Centro");
     const proofName = userData.proofOfResidencyName || "barangay_residency_clearance.png";
 
+    // 2. Verify and persist with backend directory
+    try {
+      const backendRes = await residentsApi.register({
+        fullName,
+        contactNumber: userData.contactNumber || "0917-123-4567",
+        purok: userData.sitioAddress || "Sitio Centro",
+        address: userData.sitioAddress || "Barangay Anupul",
+        email: cleanEmail,
+        proofOfResidencyName: proofName,
+        proofOfResidencyUrl: proofUrl,
+      });
+
+      if (backendRes && backendRes.success === false) {
+        return {
+          success: false,
+          message: backendRes.message || "An account with this email address already exists.",
+        };
+      }
+    } catch (err) {
+      const errMsg = err?.response?.data?.message || err?.message || "";
+      if (errMsg.toLowerCase().includes("already exists") || errMsg.toLowerCase().includes("duplicate")) {
+        return {
+          success: false,
+          message: errMsg,
+        };
+      }
+      console.warn("Backend resident register notice:", err.message);
+    }
+
     const newResident = {
       id: "REG-" + Date.now(),
       ...userData,
+      email: cleanEmail,
       barangay: "Barangay Anupul",
       municipality: "Bamban",
       province: "Tarlac",
@@ -342,38 +397,47 @@ export function AuthProvider({ children }) {
       severity: "notice",
     });
 
-    // Also send to backend resident directory
-    try {
-      await residentsApi.register({
-        fullName,
-        contactNumber: userData.contactNumber || "0917-123-4567",
-        purok: userData.sitioAddress || "Sitio Centro",
-        address: userData.sitioAddress || "Barangay Anupul",
-        email: userData.email,
-        proofOfResidencyName: proofName,
-        proofOfResidencyUrl: proofUrl,
-      });
-    } catch (err) {
-      console.warn("Backend resident register notice:", err.message);
-    }
-
-    return true;
+    return { success: true };
   };
 
   const registerAdmin = async (adminData) => {
+    const cleanEmail = (adminData.email || "").trim().toLowerCase();
+
+    // 1. Verify uniqueness against local database
     const existing = (userDatabase || []).find(
-      (u) => u.email?.toLowerCase().trim() === adminData.email?.toLowerCase().trim()
+      (u) => (u.email || "").trim().toLowerCase() === cleanEmail
     );
 
     if (existing) {
-      return { success: false, message: "An account with this email already exists." };
+      return { success: false, message: "An account with this email address already exists." };
+    }
+
+    // 2. Verify and persist with backend auth
+    try {
+      const res = await authApi.register({
+        fullName: `${adminData.firstName} ${adminData.lastName}`,
+        email: cleanEmail,
+        password: adminData.password,
+        role: "Barangay Official",
+        position: adminData.officialPosition || "Barangay Staff",
+        contactNumber: adminData.contactNumber || "0917-123-4567",
+      });
+      if (res && res.success === false) {
+        return { success: false, message: res.message || "An account with this email already exists." };
+      }
+    } catch (err) {
+      const errMsg = err?.response?.data?.message || err?.message || "";
+      if (errMsg.toLowerCase().includes("already exists") || errMsg.toLowerCase().includes("duplicate")) {
+        return { success: false, message: errMsg };
+      }
+      console.warn("Backend admin register notice:", err.message);
     }
 
     const newAdmin = {
       id: "ADMIN-" + Date.now(),
       firstName: adminData.firstName,
       lastName: adminData.lastName,
-      email: adminData.email,
+      email: cleanEmail,
       officialPosition: adminData.officialPosition,
       contactNumber: adminData.contactNumber || "0917-123-4567",
       barangay: "Barangay Anupul",
@@ -395,20 +459,6 @@ export function AuthProvider({ children }) {
       details: `Admin privileges requested for position: ${newAdmin.officialPosition}.`,
       severity: "warning",
     });
-
-    // Also register on backend REST API
-    try {
-      await authApi.register({
-        fullName: `${adminData.firstName} ${adminData.lastName}`,
-        email: adminData.email,
-        password: adminData.password,
-        role: "Barangay Official",
-        position: adminData.officialPosition || "Barangay Staff",
-        contactNumber: adminData.contactNumber || "0917-123-4567",
-      });
-    } catch (err) {
-      console.warn("Backend admin register notice:", err.message);
-    }
 
     return { success: true };
   };
@@ -655,9 +705,24 @@ export function AuthProvider({ children }) {
   };
 
   const addUser = (userData) => {
+    const cleanEmail = (userData.email || "").trim().toLowerCase();
+
+    if (cleanEmail) {
+      const existing = (userDatabase || []).find(
+        (u) => (u.email || "").trim().toLowerCase() === cleanEmail
+      );
+      if (existing) {
+        return {
+          success: false,
+          message: `An account with email "${cleanEmail}" already exists.`,
+        };
+      }
+    }
+
     const newUser = {
       id: (userData.role === "admin" ? "ADMIN-" : "RES-") + Date.now(),
       ...userData,
+      email: cleanEmail,
       barangay: "Barangay Anupul",
       municipality: "Bamban",
       province: "Tarlac",
@@ -670,7 +735,7 @@ export function AuthProvider({ children }) {
     if (userData.role === "admin" || userData.role === "official") {
       authApi.register({
         fullName: `${userData.firstName} ${userData.lastName}`,
-        email: userData.email,
+        email: cleanEmail,
         password: userData.password || "password123",
         role: userData.role === "admin" ? "Admin" : "Barangay Official",
         position: userData.officialPosition || "Barangay Staff",
@@ -679,7 +744,7 @@ export function AuthProvider({ children }) {
     } else {
       residentsApi.create({
         fullName: `${userData.firstName} ${userData.lastName}`,
-        email: userData.email,
+        email: cleanEmail,
         contactNumber: userData.contactNumber || "0917-123-4567",
         purok: userData.sitioAddress || "Sitio Centro",
         address: userData.sitioAddress || "Barangay Anupul",
@@ -702,7 +767,7 @@ export function AuthProvider({ children }) {
       details: `Added new user ${newUser.firstName} ${newUser.lastName} with role ${newUser.role}.`,
       severity: "info",
     });
-    return newUser;
+    return { success: true, user: newUser };
   };
 
   const changePassword = async (userId, oldPassword, newPassword) => {
@@ -763,6 +828,7 @@ export function AuthProvider({ children }) {
         updateUserRole,
         deleteUser,
         addUser,
+        isEmailTaken: (email) => isEmailAlreadyRegistered(email, userDatabase),
         changePassword,
         refreshUsersFromBackend,
       }}

@@ -38,6 +38,7 @@ export default function Login() {
     register: registerSignup,
     handleSubmit: handleSignupSubmit,
     setValue: setSignupValue,
+    setError: setSignupError,
     formState: { errors: signupErrors },
   } = useForm({
     resolver: zodResolver(signupSchema),
@@ -77,8 +78,17 @@ export default function Login() {
   };
 
   const onSignup = async (data) => {
+    setAuthError("");
     if (authRegister) {
-      await authRegister(data);
+      const result = await authRegister(data);
+      if (result && result.success === false) {
+        setAuthError(result.message || "An account with this email address already exists.");
+        setSignupError("email", {
+          type: "manual",
+          message: result.message || "This email address is already registered.",
+        });
+        return;
+      }
       alert("Registration submitted! Your Barangay Anupul residency is awaiting verification.");
       setIsLogin(true);
       setLoginValue("identifier", data.email);

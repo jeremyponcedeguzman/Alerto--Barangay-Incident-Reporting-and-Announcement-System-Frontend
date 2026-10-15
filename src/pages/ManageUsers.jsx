@@ -118,7 +118,7 @@ export default function ManageUsers() {
     }
   };
 
-  const handleAddUserSubmit = (e) => {
+  const handleAddUserSubmit = async (e) => {
     e.preventDefault();
     if (!newUserForm.firstName.trim() || !newUserForm.lastName.trim() || !newUserForm.email.trim()) {
       alert("Please fill in the required resident information.");
@@ -126,7 +126,11 @@ export default function ManageUsers() {
     }
 
     if (addUser) {
-      addUser(newUserForm);
+      const result = await addUser(newUserForm);
+      if (result && result.success === false) {
+        alert(result.message || "An account with this email address already exists.");
+        return;
+      }
       setShowAddUserModal(false);
       setNewUserForm({
         firstName: "",

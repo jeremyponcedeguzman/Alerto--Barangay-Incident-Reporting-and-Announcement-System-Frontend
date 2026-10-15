@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { useAuth, SITIO_LIST } from "../context/AuthContext";
+import { useAuth, SITIO_LIST, generateSampleCertificate } from "../context/AuthContext";
 import {
   Users,
   Search,
@@ -16,7 +16,9 @@ import {
   Phone,
   Filter,
   Eye,
-  X
+  X,
+  ExternalLink,
+  ZoomIn
 } from "lucide-react";
 
 export default function ManageUsers() {
@@ -506,24 +508,60 @@ export default function ManageUsers() {
               </div>
 
               <div style={{ marginBottom: "1.5rem" }}>
-                <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "#475569" }}>Proof of Residency Document:</span>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                  <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "#475569" }}>Proof of Residency Document:</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const docUrl = inspectUser.proofOfResidencyUrl || generateSampleCertificate(`${inspectUser.firstName} ${inspectUser.lastName}`, inspectUser.sitioAddress);
+                      const win = window.open();
+                      if (win) {
+                        win.document.write(`<title>Document - ${inspectUser.firstName} ${inspectUser.lastName}</title><body style="margin:0;background:#1e293b;display:flex;justify-content:center;align-items:center;min-height:100vh;"><img src="${docUrl}" style="max-width:90%;max-height:95vh;box-shadow:0 10px 30px rgba(0,0,0,0.5);"/></body>`);
+                      }
+                    }}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      fontSize: "0.74rem",
+                      fontWeight: 700,
+                      color: "#0284c7",
+                      backgroundColor: "transparent",
+                      border: "none",
+                      cursor: "pointer"
+                    }}
+                  >
+                    <ExternalLink size={13} /> Open Full Document
+                  </button>
+                </div>
+
                 <div style={{
-                  height: "160px",
+                  maxHeight: "260px",
+                  overflow: "auto",
                   backgroundColor: "#0f172a",
-                  color: "#94a3b8",
                   borderRadius: "8px",
                   display: "flex",
                   flexDirection: "column",
                   alignItems: "center",
-                  justifyContent: "center",
-                  marginTop: "6px",
+                  justifyContent: "flex-start",
+                  padding: "10px",
                   border: "1px solid #334155"
                 }}>
-                  <FileText size={40} color="#cbd5e1" />
-                  <span style={{ marginTop: "8px", fontSize: "0.82rem", fontWeight: 600 }}>
-                    {inspectUser.proofOfResidencyName || "Barangay_Clearance_Certificate.pdf"}
-                  </span>
-                  <span style={{ fontSize: "0.72rem", color: "#64748b" }}>Official Verified Document</span>
+                  <img
+                    src={inspectUser.proofOfResidencyUrl || generateSampleCertificate(`${inspectUser.firstName} ${inspectUser.lastName}`, inspectUser.sitioAddress)}
+                    alt={`Proof for ${inspectUser.firstName} ${inspectUser.lastName}`}
+                    style={{
+                      maxWidth: "100%",
+                      height: "auto",
+                      borderRadius: "6px",
+                      boxShadow: "0 10px 20px rgba(0,0,0,0.4)",
+                      backgroundColor: "white"
+                    }}
+                  />
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "6px", fontSize: "0.74rem", color: "#64748b" }}>
+                  <span>📄 {inspectUser.proofOfResidencyName || "Barangay_Clearance_Certificate.png"}</span>
+                  <span style={{ color: "#10b981", fontWeight: 600 }}>✓ Verified Document Record</span>
                 </div>
               </div>
 

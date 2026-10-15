@@ -81,6 +81,7 @@ export const signupSchema = z
         message: "You must confirm that you reside or own property in Barangay Anupul",
       }),
     proofOfResidencyName: z.string().optional(),
+    proofOfResidencyUrl: z.string().optional(),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords do not match",

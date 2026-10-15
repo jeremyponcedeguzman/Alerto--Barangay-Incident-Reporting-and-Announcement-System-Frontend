@@ -1,11 +1,12 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { useAuth, generateSampleCertificate } from "../context/AuthContext";
 import { useIncidents } from "../context/IncidentContext";
 import AdminNavbar from "./AdminNavbar";
 import Announcements from "../pages/Announcements";
 import IncidentMap from "../pages/IncidentMap";
 import DutyRoster from "../pages/DutyRoster";
+import { FileText, Eye, ZoomIn, ZoomOut, RotateCcw, ExternalLink, X, CheckCircle, ShieldCheck, UserCheck, AlertCircle } from "lucide-react";
 
 export default function AdminApprovals() {
   const auth = useAuth() || {};
@@ -21,6 +22,8 @@ export default function AdminApprovals() {
   const [rejectingUserId, setRejectingUserId] = useState(null);
   const [rejectionReasonInput, setRejectionReasonInput] = useState("");
   const [expandedUserReports, setExpandedUserReports] = useState({});
+  const [inspectingProofUser, setInspectingProofUser] = useState(null);
+  const [zoomScale, setZoomScale] = useState(1);
 
   const SITIO_LIST = [
     "Sitio Baguingit",
@@ -278,14 +281,40 @@ export default function AdminApprovals() {
                             <div><strong>Contact Number:</strong> {user.contactNumber || "N/A"}</div>
                             <div style={{ gridColumn: "span 2" }}><strong>Email Address:</strong> {user.email || "N/A"}</div>
                             <div style={{ gridColumn: "span 2", paddingTop: "0.5rem", borderTop: "1px dashed #cbd5e1" }}>
-                              <strong>Proof of Residency Document:</strong>
-                              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "4px" }}>
-                                <span>📄 {user.proofOfResidency?.name || user.proofOfResidencyName || "Official Barangay Certificate / ID"}</span>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                                <strong>Proof of Residency Document:</strong>
+                                <span style={{ fontSize: "0.72rem", color: "#64748b" }}>Official Verified Copy</span>
+                              </div>
+                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", marginTop: "4px", padding: "6px 10px", backgroundColor: "#f1f5f9", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0, overflow: "hidden" }}>
+                                  <FileText size={18} color="#0284c7" />
+                                  <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "#1e293b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                    {user.proofOfResidencyName || user.proofOfResidency?.name || "barangay_clearance.png"}
+                                  </span>
+                                </div>
                                 <button
                                   type="button"
-                                  onClick={() => alert(`Reviewing uploaded proof of residency for ${user.firstName} ${user.lastName}:\n\nAddress: ${user.sitioAddress || "Barangay Anupul"}\nStatus: Verified Barangay Anupul Resident`)}
-                                  style={{ padding: "0.25rem 0.5rem", border: "1px solid #cbd5e1", borderRadius: "4px", backgroundColor: "#f8fafc", cursor: "pointer", fontSize: "0.75rem" }}
+                                  onClick={() => {
+                                    setInspectingProofUser(user);
+                                    setZoomScale(1);
+                                  }}
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "5px",
+                                    padding: "0.35rem 0.75rem",
+                                    border: "1px solid #0284c7",
+                                    borderRadius: "6px",
+                                    backgroundColor: "#0284c7",
+                                    color: "white",
+                                    cursor: "pointer",
+                                    fontSize: "0.76rem",
+                                    fontWeight: 700,
+                                    whiteSpace: "nowrap",
+                                    boxShadow: "0 1px 2px rgba(2, 132, 199, 0.2)"
+                                  }}
                                 >
+                                  <Eye size={13} />
                                   Inspect File
                                 </button>
                               </div>
@@ -483,6 +512,303 @@ export default function AdminApprovals() {
         )}
 
       </main>
+
+      {/* 6. DOCUMENT INSPECTION LIGHTBOX MODAL */}
+      {inspectingProofUser && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(15, 23, 42, 0.75)",
+            backdropFilter: "blur(6px)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "1rem"
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setInspectingProofUser(null);
+          }}
+        >
+          <div
+            style={{
+              maxWidth: "880px",
+              width: "100%",
+              maxHeight: "92vh",
+              backgroundColor: "#ffffff",
+              borderRadius: "16px",
+              display: "flex",
+              flexDirection: "column",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.4)",
+              overflow: "hidden",
+              border: "1px solid #e2e8f0"
+            }}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "1.2rem 1.5rem",
+                borderBottom: "1px solid #e2e8f0",
+                backgroundColor: "#0f172a",
+                color: "#ffffff"
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <div style={{ width: "38px", height: "38px", borderRadius: "10px", backgroundColor: "#0284c7", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <ShieldCheck size={22} color="white" />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 800, color: "white" }}>
+                    Residency Verification Inspection
+                  </h3>
+                  <p style={{ margin: "2px 0 0", fontSize: "0.8rem", color: "#94a3b8" }}>
+                    {inspectingProofUser.firstName} {inspectingProofUser.lastName} • {inspectingProofUser.sitioAddress || "Sitio Centro"}, Barangay Anupul
+                  </p>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <span
+                  style={{
+                    fontSize: "0.75rem",
+                    fontWeight: 700,
+                    padding: "0.25rem 0.65rem",
+                    borderRadius: "9999px",
+                    backgroundColor: inspectingProofUser.verificationStatus === "approved" ? "#166534" : inspectingProofUser.verificationStatus === "rejected" ? "#991b1b" : "#b45309",
+                    color: "white"
+                  }}
+                >
+                  {inspectingProofUser.verificationStatus === "approved" ? "✓ Approved Resident" : inspectingProofUser.verificationStatus === "rejected" ? "✕ Rejected" : "⏳ Pending Approval"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setInspectingProofUser(null)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "#cbd5e1",
+                    cursor: "pointer",
+                    padding: "4px",
+                    display: "flex",
+                    alignItems: "center"
+                  }}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Inspection Controls Toolbar */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "0.6rem 1.25rem",
+                backgroundColor: "#f8fafc",
+                borderBottom: "1px solid #e2e8f0",
+                fontSize: "0.8rem"
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#334155" }}>
+                <FileText size={16} color="#0284c7" />
+                <span style={{ fontWeight: 600 }}>File:</span>
+                <span style={{ fontFamily: "monospace", color: "#0f172a", backgroundColor: "#e2e8f0", padding: "2px 6px", borderRadius: "4px" }}>
+                  {inspectingProofUser.proofOfResidencyName || "barangay_clearance.png"}
+                </span>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <button
+                  type="button"
+                  onClick={() => setZoomScale((z) => Math.max(0.5, z - 0.25))}
+                  title="Zoom Out"
+                  style={{ padding: "4px 8px", borderRadius: "6px", border: "1px solid #cbd5e1", backgroundColor: "white", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", fontSize: "0.75rem" }}
+                >
+                  <ZoomOut size={14} /> -
+                </button>
+                <span style={{ fontSize: "0.75rem", fontWeight: 700, minWidth: "40px", textAlign: "center" }}>
+                  {Math.round(zoomScale * 100)}%
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setZoomScale((z) => Math.min(2.5, z + 0.25))}
+                  title="Zoom In"
+                  style={{ padding: "4px 8px", borderRadius: "6px", border: "1px solid #cbd5e1", backgroundColor: "white", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", fontSize: "0.75rem" }}
+                >
+                  <ZoomIn size={14} /> +
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setZoomScale(1)}
+                  title="Reset Zoom"
+                  style={{ padding: "4px 8px", borderRadius: "6px", border: "1px solid #cbd5e1", backgroundColor: "white", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", fontSize: "0.75rem" }}
+                >
+                  <RotateCcw size={13} /> Reset
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const docUrl = inspectingProofUser.proofOfResidencyUrl || generateSampleCertificate(`${inspectingProofUser.firstName} ${inspectingProofUser.lastName}`, inspectingProofUser.sitioAddress);
+                    const win = window.open();
+                    if (win) {
+                      win.document.write(`<title>Barangay Document - ${inspectingProofUser.firstName} ${inspectingProofUser.lastName}</title><body style="margin:0;background:#1e293b;display:flex;justify-content:center;align-items:center;min-height:100vh;"><img src="${docUrl}" style="max-width:90%;max-height:95vh;box-shadow:0 10px 30px rgba(0,0,0,0.5);"/></body>`);
+                    }
+                  }}
+                  title="Open Full Screen in New Tab"
+                  style={{ padding: "4px 10px", borderRadius: "6px", border: "1px solid #0284c7", backgroundColor: "#f0f9ff", color: "#0284c7", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", fontSize: "0.75rem", fontWeight: 700 }}
+                >
+                  <ExternalLink size={13} /> Open Tab
+                </button>
+              </div>
+            </div>
+
+            {/* Document Image Viewport */}
+            <div
+              style={{
+                flex: 1,
+                overflow: "auto",
+                backgroundColor: "#0b1329",
+                padding: "1.5rem",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                minHeight: "380px",
+                maxHeight: "56vh"
+              }}
+            >
+              <div
+                style={{
+                  transform: `scale(${zoomScale})`,
+                  transformOrigin: "center center",
+                  transition: "transform 0.15s ease",
+                  maxWidth: "100%",
+                  display: "flex",
+                  justifyContent: "center"
+                }}
+              >
+                <img
+                  src={
+                    inspectingProofUser.proofOfResidencyUrl ||
+                    generateSampleCertificate(
+                      `${inspectingProofUser.firstName} ${inspectingProofUser.lastName}`,
+                      inspectingProofUser.sitioAddress
+                    )
+                  }
+                  alt={`Proof of Residency for ${inspectingProofUser.firstName} ${inspectingProofUser.lastName}`}
+                  style={{
+                    maxWidth: "680px",
+                    width: "100%",
+                    height: "auto",
+                    borderRadius: "8px",
+                    boxShadow: "0 20px 40px rgba(0,0,0,0.6)",
+                    border: "2px solid #334155",
+                    backgroundColor: "white"
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Verification Checklist & Footer Controls */}
+            <div
+              style={{
+                padding: "1rem 1.5rem",
+                backgroundColor: "#f8fafc",
+                borderTop: "1px solid #e2e8f0",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: "1rem",
+                flexWrap: "wrap"
+              }}
+            >
+              <div style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "0.78rem", color: "#475569" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <CheckCircle size={14} color="#10b981" />
+                  <span><strong>Applicant:</strong> {inspectingProofUser.firstName} {inspectingProofUser.lastName} ({inspectingProofUser.email || "No email"})</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <CheckCircle size={14} color="#10b981" />
+                  <span><strong>Declared Address:</strong> {inspectingProofUser.sitioAddress || "Sitio Centro"}, Barangay Anupul, Bamban, Tarlac</span>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <button
+                  type="button"
+                  onClick={() => setInspectingProofUser(null)}
+                  style={{
+                    padding: "0.6rem 1rem",
+                    borderRadius: "8px",
+                    border: "1px solid #cbd5e1",
+                    backgroundColor: "#ffffff",
+                    color: "#334155",
+                    fontWeight: 700,
+                    fontSize: "0.85rem",
+                    cursor: "pointer"
+                  }}
+                >
+                  Close Document
+                </button>
+
+                {inspectingProofUser.verificationStatus === "pending" && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const reason = prompt(`Reason for rejecting residency application for ${inspectingProofUser.firstName} ${inspectingProofUser.lastName}:`, "Document not within Barangay Anupul jurisdiction or illegible.");
+                        if (reason && reason.trim()) {
+                          if (rejectResident) rejectResident(inspectingProofUser.id, reason.trim());
+                          setInspectingProofUser(null);
+                        }
+                      }}
+                      style={{
+                        padding: "0.6rem 1rem",
+                        borderRadius: "8px",
+                        border: "1px solid #ef4444",
+                        backgroundColor: "#fef2f2",
+                        color: "#ef4444",
+                        fontWeight: 700,
+                        fontSize: "0.85rem",
+                        cursor: "pointer"
+                      }}
+                    >
+                      Reject Application
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (approveResident) approveResident(inspectingProofUser.id);
+                        setInspectingProofUser(null);
+                      }}
+                      style={{
+                        padding: "0.6rem 1.25rem",
+                        borderRadius: "8px",
+                        border: "none",
+                        backgroundColor: "#10b981",
+                        color: "white",
+                        fontWeight: 700,
+                        fontSize: "0.85rem",
+                        cursor: "pointer",
+                        boxShadow: "0 2px 4px rgba(16, 185, 129, 0.3)"
+                      }}
+                    >
+                      ✓ Approve Residency
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

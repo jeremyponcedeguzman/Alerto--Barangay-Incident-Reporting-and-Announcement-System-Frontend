@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useAuth, SITIO_LIST } from "../context/AuthContext";
 import { Radio, ShieldCheck, Mail, Lock, Phone, User, MapPin, Upload, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { loginSchema, signupSchema } from "../schemas";
+import { uploadApi } from "../api";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -15,6 +16,8 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [authError, setAuthError] = useState("");
   const [uploadedProofName, setUploadedProofName] = useState("");
+  const [proofPreview, setProofPreview] = useState(null);
+  const [isUploadingProof, setIsUploadingProof] = useState(false);
 
   // 1. React Hook Form for Resident Login
   const {
@@ -48,6 +51,7 @@ export default function Login() {
       confirmPassword: "",
       isAnupulResident: false,
       proofOfResidencyName: "",
+      proofOfResidencyUrl: "",
     },
   });
 
@@ -98,6 +102,27 @@ export default function Login() {
     if (file) {
       setUploadedProofName(file.name);
       setSignupValue("proofOfResidencyName", file.name);
+
+      const reader = new FileReader();
+      reader.onload = async (evt) => {
+        const base64Data = evt.target.result;
+        setProofPreview(base64Data);
+        setSignupValue("proofOfResidencyUrl", base64Data);
+
+        try {
+          setIsUploadingProof(true);
+          const uploadRes = await uploadApi.uploadImage(base64Data, "barangay-emergency/residents");
+          if (uploadRes?.data?.url || uploadRes?.url) {
+            const remoteUrl = uploadRes.data?.url || uploadRes.url;
+            setSignupValue("proofOfResidencyUrl", remoteUrl);
+          }
+        } catch (uploadErr) {
+          console.warn("Retaining base64 document proof (upload notice):", uploadErr?.message);
+        } finally {
+          setIsUploadingProof(false);
+        }
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -300,13 +325,44 @@ export default function Login() {
               <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#334155", marginBottom: "0.3rem" }}>Proof of Residency Document (ID / Barangay Clearance)</label>
               <input
                 type="file"
+                accept="image/*,.pdf"
                 onChange={handleFileChange}
                 style={{ width: "100%", padding: "0.5rem", borderRadius: "8px", border: "1px dashed #cbd5e1", fontSize: "0.8rem", boxSizing: "border-box" }}
               />
-              {uploadedProofName && (
-                <span style={{ fontSize: "0.74rem", color: "#059669", display: "block", marginTop: "3px" }}>
-                  Selected: {uploadedProofName}
-                </span>
+              {proofPreview && (
+                <div style={{ marginTop: "8px", padding: "8px 10px", borderRadius: "8px", backgroundColor: "#f8fafc", border: "1px solid #e2e8f0", display: "flex", alignItems: "center", gap: "10px" }}>
+                  {proofPreview.startsWith("data:image/") || proofPreview.startsWith("http") ? (
+                    <img
+                      src={proofPreview}
+                      alt="Proof Preview"
+                      style={{ width: "44px", height: "44px", objectFit: "cover", borderRadius: "6px", border: "1px solid #cbd5e1" }}
+                    />
+                  ) : (
+                    <div style={{ width: "44px", height: "44px", borderRadius: "6px", backgroundColor: "#e2e8f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem" }}>
+                      📄
+                    </div>
+                  )}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#1e293b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {uploadedProofName || "Uploaded Proof Document"}
+                    </div>
+                    <div style={{ fontSize: "0.72rem", color: isUploadingProof ? "#d97706" : "#059669", fontWeight: 600 }}>
+                      {isUploadingProof ? "Uploading to Cloud..." : "✓ Document attached & ready for official inspection"}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProofPreview(null);
+                      setUploadedProofName("");
+                      setSignupValue("proofOfResidencyName", "");
+                      setSignupValue("proofOfResidencyUrl", "");
+                    }}
+                    style={{ fontSize: "0.74rem", color: "#ef4444", background: "none", border: "none", cursor: "pointer", fontWeight: 700, padding: "4px" }}
+                  >
+                    Remove
+                  </button>
+                </div>
               )}
             </div>
 

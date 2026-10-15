@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { logAuditEvent, AUDIT_CATEGORIES } from "../utils/auditLogger";
-import { authApi, residentsApi, healthApi } from "../api";
+import { authApi, residentsApi, healthApi, getAuthToken } from "../api";
 
 const AuthContext = createContext(null);
 
@@ -123,9 +123,12 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener("storage", handleStorageChange);
   }, [currentUser]);
 
-  // Sync backend officials and residents on mount
+  // Sync backend officials and residents on mount (only when authenticated)
   const refreshUsersFromBackend = useCallback(async () => {
     try {
+      const token = getAuthToken();
+      if (!token) return; // Protected directory fetch requires active official/admin JWT
+
       const health = await healthApi.check();
       if (!health.success) return;
 
@@ -333,6 +336,7 @@ export function AuthProvider({ children }) {
             details: `Authenticated via REST API. Role: ${apiRes.user.role}.`,
             severity: "info",
           });
+          refreshUsersFromBackend();
           return { success: true, user: liveUser };
         }
       } catch (err) {

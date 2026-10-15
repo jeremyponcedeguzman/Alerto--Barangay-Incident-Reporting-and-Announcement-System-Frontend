@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Shield, Phone, Clock, Search, UserCheck, UserX, ArrowLeft } from "lucide-react";
-import { authApi } from "../api";
+import { authApi, getAuthToken } from "../api";
 
 export const INITIAL_PERSONNEL = [
   { id: 1, name: "Hon. Roberto Santos", role: "Barangay Captain", category: "Official", isDuty: true, shift: "Day (8:00 AM - 5:00 PM)", contact: "0917-111-2222", badge: "BRGY-CPT-01" },
@@ -24,9 +24,10 @@ export default function DutyRoster() {
     }
   });
 
-  // Sync with officials from backend
+  // Sync with officials from backend (only when authenticated)
   useEffect(() => {
     async function loadBackendOfficials() {
+      if (!getAuthToken()) return;
       try {
         const res = await authApi.getOfficials();
         if (res.success && Array.isArray(res.data) && res.data.length > 0) {

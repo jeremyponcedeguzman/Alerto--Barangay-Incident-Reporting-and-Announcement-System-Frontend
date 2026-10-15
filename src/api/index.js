@@ -46,7 +46,10 @@ apiClient.interceptors.response.use(
       error.message ||
       'Network request failed';
 
-    console.warn(`[Axios API] Request failed for ${error.config?.url || 'endpoint'}:`, errorMessage);
+    // Only log warnings if it's not a standard 401 unauthenticated check
+    if (error.response?.status !== 401) {
+      console.warn(`[Axios API] Request failed for ${error.config?.url || 'endpoint'}:`, errorMessage);
+    }
 
     return {
       success: false,

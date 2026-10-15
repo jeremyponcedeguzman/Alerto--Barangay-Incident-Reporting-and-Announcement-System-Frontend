@@ -4,7 +4,7 @@ import { useState, useCallback } from "react";
  * Custom hook to manage GPS device location fetching,
  * loading states, and coordinate updates.
  */
-export function useGeolocation(defaultCoords = { lat: 14.5605, lng: 121.0182 }) {
+export function useGeolocation(defaultCoords = { lat: 15.2894, lng: 120.5718 }) {
   const [coords, setCoords] = useState(defaultCoords);
   const [isLoading, setIsLoading] = useState(false);
   const [geoError, setGeoError] = useState("");

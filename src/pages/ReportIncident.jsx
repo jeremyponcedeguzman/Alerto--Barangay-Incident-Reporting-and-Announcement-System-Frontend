@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import L from "leaflet";
 import {
   AlertTriangle,
@@ -30,7 +30,15 @@ import { createDraftLocationIcon } from "../utils/mapIcons";
 
 export default function ReportIncident() {
   const navigate = useNavigate();
-  const { addIncident, currentUser } = useIncidents();
+  const [searchParams] = useSearchParams();
+  const editId = searchParams.get("edit") || searchParams.get("id");
+  const { addIncident, updateIncident, incidents, currentUser } = useIncidents();
+
+  const existingIncident = editId
+    ? incidents?.find(
+        (i) => String(i.id) === String(editId) || String(i._id) === String(editId)
+      )
+    : null;
 
   const [category, setCategory] = useState("flood");
   const [severity, setSeverity] = useState("high");
@@ -57,6 +65,26 @@ export default function ReportIncident() {
   const miniMapContainerRef = useRef(null);
   const miniMapInstanceRef = useRef(null);
   const draftMarkerRef = useRef(null);
+
+  // Pre-fill form when editing an existing incident
+  useEffect(() => {
+    if (existingIncident) {
+      if (existingIncident.title) setTitle(existingIncident.title);
+      if (existingIncident.category) setCategory(existingIncident.category);
+      if (existingIncident.severity) setSeverity(existingIncident.severity);
+      if (existingIncident.locationName) setLocationName(existingIncident.locationName);
+      if (existingIncident.description) setDescription(existingIncident.description);
+      if (existingIncident.lat && existingIncident.lng) {
+        setLat(existingIncident.lat);
+        setLng(existingIncident.lng);
+        if (miniMapInstanceRef.current && draftMarkerRef.current) {
+          miniMapInstanceRef.current.setView([existingIncident.lat, existingIncident.lng], 16);
+          draftMarkerRef.current.setLatLng([existingIncident.lat, existingIncident.lng]);
+        }
+      }
+      if (existingIncident.imageEvidence) setCapturedImage(existingIncident.imageEvidence);
+    }
+  }, [existingIncident]);
 
   // Open live webcam / hardware camera stream
   const handleOpenLiveCamera = async () => {
@@ -213,7 +241,7 @@ export default function ReportIncident() {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!title.trim() || !locationName.trim() || !description.trim()) {
       alert("Please fill in all required fields before submitting.");
@@ -227,8 +255,32 @@ export default function ReportIncident() {
 
     setIsSubmitting(true);
 
-    setTimeout(() => {
-      const newInc = addIncident({
+    try {
+      if (editId) {
+        // Update the existing incident report instead of creating a duplicate
+        await updateIncident(editId, {
+          title,
+          category,
+          severity,
+          locationName,
+          lat,
+          lng,
+          description,
+          imageEvidence: capturedImage,
+          responder: categoryObj.responder,
+        });
+
+        setIsSubmitting(false);
+        setSubmittedSuccess(true);
+
+        setTimeout(() => {
+          navigate(`/map?id=${editId}`);
+        }, 1200);
+        return;
+      }
+
+      // Create brand new incident
+      const newInc = await addIncident({
         title,
         category,
         severity,
@@ -245,9 +297,13 @@ export default function ReportIncident() {
       setSubmittedSuccess(true);
 
       setTimeout(() => {
-        navigate(`/map?id=${newInc.id}`);
+        navigate(`/map?id=${newInc?.id || ""}`);
       }, 1500);
-    }, 800);
+    } catch (err) {
+      console.error("Submission failed:", err);
+      setIsSubmitting(false);
+      alert("Error submitting incident: " + err.message);
+    }
   };
 
   return (
@@ -258,10 +314,11 @@ export default function ReportIncident() {
             <div className="success-icon-wrapper">
               <CheckCircle size={56} className="text-emerald-500" />
             </div>
-            <h2>Incident Successfully Dispatched & Logged!</h2>
+            <h2>{editId ? `Incident #${editId} Successfully Updated!` : "Incident Successfully Dispatched & Logged!"}</h2>
             <p className="success-sub">
-              Your report with real-time camera evidence has been received by Barangay Anupul Operations Command.
-              Responders have been notified and a live pin has been activated on the incident map.
+              {editId
+                ? "Your updated information and photo evidence have been saved and synced across Barangay Anupul Operations Command."
+                : "Your report with real-time camera evidence has been received by Barangay Anupul Operations Command. Responders have been notified and a live pin has been activated on the incident map."}
             </p>
             <div className="redirect-countdown">
               <Clock size={16} /> Redirecting to Live Incident Map in 2 seconds...
@@ -274,9 +331,13 @@ export default function ReportIncident() {
                 <ArrowLeft size={20} />
               </Link>
               <div>
-                <h1 className="report-card-title">Report an Incident or Emergency</h1>
+                <h1 className="report-card-title">
+                  {editId ? `Update Report #${editId}` : "Report an Incident or Emergency"}
+                </h1>
                 <p className="report-card-subtitle">
-                  Provide exact details and real-time live camera evidence to immediately alert Barangay Tanod, BFP, BHERT, or DRRMO teams.
+                  {editId
+                    ? "Modify description, location pin coordinates, or update live camera evidence for this active report."
+                    : "Provide exact details and real-time live camera evidence to immediately alert Barangay Tanod, BFP, BHERT, or DRRMO teams."}
                 </p>
               </div>
             </div>
@@ -556,7 +617,15 @@ export default function ReportIncident() {
                   style={{ opacity: !capturedImage ? 0.6 : 1 }}
                 >
                   <Send size={18} />
-                  <span>{isSubmitting ? "Submitting Report..." : "Submit Incident Report"}</span>
+                  <span>
+                    {isSubmitting
+                      ? editId
+                        ? "Saving Changes..."
+                        : "Submitting Report..."
+                      : editId
+                      ? "Save Updated Incident"
+                      : "Submit Incident Report"}
+                  </span>
                 </button>
               </div>
             </form>

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useMemo, useEffect } from "react";
+import React, { createContext, useContext, useState, useMemo, useEffect, useCallback } from "react";
 import {
   formatDateTime,
   formatTimeOnly,
@@ -6,6 +6,7 @@ import {
   formatDynamicTimestamp,
 } from "../utils/timeUtils";
 import { logAuditEvent, AUDIT_CATEGORIES } from "../utils/auditLogger";
+import { incidentsApi, alertsApi, healthApi } from "../api";
 
 const IncidentContext = createContext(null);
 
@@ -78,12 +79,12 @@ export const CURRENT_USER = {
 
 // Default Barangay Poblacion / Anupul Center Coordinates
 export const BARANGAY_CENTER = {
-  lat: 14.5605,
-  lng: 121.0182,
-  name: "Barangay Anupul Operations Center",
+  lat: 15.2894,
+  lng: 120.5718,
+  name: "Barangay Anupul Operations Center, Bamban, Tarlac",
 };
 
-// Initial realistic incident data with dynamic createdAt timestamps
+// Initial realistic incident data located in Barangay Anupul, Bamban, Tarlac
 const INITIAL_INCIDENTS = [
   {
     id: "INC-2026-001",
@@ -91,77 +92,77 @@ const INITIAL_INCIDENTS = [
     category: "fire",
     severity: "critical",
     status: "Dispatched",
-    locationName: "Kamagong St. cor. Bagtikan St.",
-    lat: 14.5632,
-    lng: 121.0155,
+    locationName: "Sitio Centro near Barangay Hall, Anupul",
+    lat: 15.2898,
+    lng: 120.5721,
     reportedBy: "Resident Maria Santos",
     isUserReport: true,
     createdAt: new Date(Date.now() - 12 * 60 * 1000).toISOString(),
-    description: "Thick black smoke coming from a two-story residential house. BFP truck en route.",
+    description: "Thick black smoke emitting from two-story residential house near Barangay Hall. BFP Bamban fire truck en route.",
     responder: "BFP Firefighters 🚒",
     votes: 8,
   },
   {
     id: "INC-2026-002",
-    title: "Electrical Transformer Spark / Small Fire",
+    title: "Electrical Transformer Spark / Cable Line Fire",
     category: "fire",
     severity: "high",
     status: "In Progress",
-    locationName: "Mayapis St. near Yakal",
-    lat: 14.5645,
-    lng: 121.0168,
+    locationName: "MacArthur Highway cor. Sitio Manga, Anupul",
+    lat: 15.2912,
+    lng: 120.5735,
     reportedBy: "Store Owner Arthur V.",
     isUserReport: false,
     createdAt: new Date(Date.now() - 24 * 60 * 1000).toISOString(),
-    description: "Sparks flying from overhead transformer near convenience store.",
+    description: "Sparks flying from overhead electric transformer along MacArthur Highway near convenience mart.",
     responder: "BFP & Meralco ⚡",
     votes: 5,
   },
   {
     id: "INC-2026-003",
-    title: "Trash Fire Threatening Nearby Fence",
+    title: "Trash & Brush Fire Threatening Perimeter Fence",
     category: "fire",
     severity: "medium",
-    status: "Pending",
-    locationName: "Chino Roces Ave. vacant lot",
-    lat: 14.5621,
-    lng: 121.0142,
+    status: "Pending Review",
+    locationName: "Sitio Priority Vacant Lot, Anupul",
+    lat: 15.2940,
+    lng: 120.5762,
     reportedBy: "Barangay Tanod Patrol",
     isUserReport: false,
     createdAt: new Date(Date.now() - 38 * 60 * 1000).toISOString(),
-    description: "Illegal burning of refuse spreading near dry wooden perimeter fence.",
+    description: "Illegal burning of dry cogon grass spreading dangerously near residential wooden fence.",
     responder: "BFP & Tanod 🚒",
     votes: 3,
   },
   {
     id: "INC-2026-004",
-    title: "Knee-Deep Gutter Flood / Clogged Drainage",
+    title: "Knee-Deep Gutter Flood / Clogged Drainage Culvert",
     category: "flood",
     severity: "high",
     status: "In Progress",
-    locationName: "St. Paul St. lowland corner",
-    lat: 14.5575,
-    lng: 121.0205,
+    locationName: "Sitio Binitagan Interior Access Road, Anupul",
+    lat: 15.2881,
+    lng: 120.5708,
     reportedBy: "Juan Dela Cruz",
     isUserReport: true,
     createdAt: new Date(Date.now() - 18 * 60 * 1000).toISOString(),
-    description: "Water has reached knee level, impassable to light vehicles. Trash blocking drainage grates.",
+    description: "Water has reached knee level, impassable to light tricycles. Trash and silt blocking drainage grates.",
     responder: "DRRMO & Engineering 🌊",
     votes: 14,
   },
   {
     id: "INC-2026-005",
-    title: "Rising Floodwater Near Creek Boundary",
+    title: "Rising Creek Overflow Near Lowland Boundary",
     category: "flood",
     severity: "critical",
     status: "In Progress",
-    locationName: "Estero de Tripa de Gallina Bank",
-    lat: 14.5568,
-    lng: 121.0215,
+    locationName: "Sitio Baguingit Creek Bank, Anupul",
+    lat: 15.2872,
+    lng: 120.5695,
     reportedBy: "Tanod Watch Post 4",
     isUserReport: false,
     createdAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
-    description: "Creek water level warning: reached Orange Alert threshold. Evacuation standby.",
+    description: "Creek water level reached Orange Alert threshold. Low-lying riverside homes placed on evacuation standby.",
     responder: "DRRMO Rescue Unit 🌊",
     votes: 21,
   },
@@ -171,13 +172,13 @@ const INITIAL_INCIDENTS = [
     category: "flood",
     severity: "critical",
     status: "Dispatched",
-    locationName: "Urban Ave. Interior Alley",
-    lat: 14.5582,
-    lng: 121.0195,
+    locationName: "Sitio Mape Lowland Compound, Anupul",
+    lat: 15.2858,
+    lng: 120.5684,
     reportedBy: "Resident Cora Diaz",
     isUserReport: false,
     createdAt: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
-    description: "Two elderly residents unable to exit home due to 2-foot floodwater.",
+    description: "Two elderly residents unable to exit home due to 2-foot stormwater pooling inside interior alley.",
     responder: "DRRMO & Barangay Ambulance 🚑",
     votes: 9,
   },
@@ -186,14 +187,14 @@ const INITIAL_INCIDENTS = [
     title: "Drainage Backflow into Driveways",
     category: "flood",
     severity: "medium",
-    status: "Pending",
-    locationName: "Washington St. cor. Dela Rosa",
-    lat: 14.5591,
-    lng: 121.0219,
+    status: "Pending Review",
+    locationName: "Sitio Pag-asa Main Pathway, Anupul",
+    lat: 15.2865,
+    lng: 120.5711,
     reportedBy: "Resident Ben Perez",
     isUserReport: false,
     createdAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
-    description: "Water bubbling up through manhole covers during heavy rain shower.",
+    description: "Stormwater bubbling through drainage grates during heavy monsoon rains.",
     responder: "Engineering Team 🛠️",
     votes: 4,
   },
@@ -203,77 +204,77 @@ const INITIAL_INCIDENTS = [
     category: "medical",
     severity: "critical",
     status: "Dispatched",
-    locationName: "Guijo St. Unit 302",
-    lat: 14.5615,
-    lng: 121.0232,
+    locationName: "Sitio San Joseph, Anupul",
+    lat: 15.2925,
+    lng: 120.5742,
     reportedBy: "Family Member Ana G.",
     isUserReport: false,
     createdAt: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-    description: "72yo patient experiencing shortness of breath. Oxygen tank requested.",
+    description: "72yo resident experiencing shortness of breath. Barangay ambulance and oxygen assistance requested.",
     responder: "BHERT & Barangay Ambulance 🚑",
     votes: 2,
   },
   {
     id: "INC-2026-009",
-    title: "Motorcycle Fall Injury - First Aid Needed",
+    title: "Motorcycle Fall Injury - First Aid Administered",
     category: "medical",
     severity: "medium",
     status: "Resolved",
-    locationName: "Buendia Ave. (Gil Puyat) service lane",
-    lat: 14.5562,
-    lng: 121.0135,
+    locationName: "MacArthur Highway near Anupul Elementary School",
+    lat: 15.2905,
+    lng: 120.5728,
     reportedBy: "Traffic Marshall",
     isUserReport: false,
     createdAt: new Date(Date.now() - 120 * 60 * 1000).toISOString(),
-    description: "Rider slipped on wet road markings. Minor lacerations on knees, treated on site.",
+    description: "Rider slipped on wet highway road markings. Minor lacerations on knees, treated on site by BHERT.",
     responder: "BHERT Medic 🚑",
     votes: 6,
   },
   {
     id: "INC-2026-010",
-    title: "Store Burglary & Shoplifting",
+    title: "Commercial Store Break-In & Theft Attempt",
     category: "police",
-    severity: "low",
+    severity: "medium",
     status: "In Progress",
-    locationName: "Tindalo St. Convenience Store",
-    lat: 14.5651,
-    lng: 121.0198,
+    locationName: "Sitio Centro Commercial Strip, Anupul",
+    lat: 15.2891,
+    lng: 120.5716,
     reportedBy: "Juan Dela Cruz",
     isUserReport: true,
     createdAt: new Date(Date.now() - 50 * 60 * 1000).toISOString(),
-    description: "Commercial store break-in attempt and property theft reported. Tanod / Police investigation requested.",
+    description: "Sari-sari store break-in attempt and property theft reported. Tanod / Police investigation requested.",
     responder: "Barangay Tanod Patrol 👮",
     votes: 7,
   },
   {
     id: "INC-2026-011",
-    title: "Two-Vehicle Collision Blocking Intersection",
+    title: "Two-Vehicle Collision Blocking Highway Lane",
     category: "accident",
     severity: "high",
     status: "Dispatched",
-    locationName: "Malugay St. cor. Ayala Ave. Ext.",
-    lat: 14.5641,
-    lng: 121.0125,
+    locationName: "MacArthur Highway cor. Bamban Boundary, Anupul",
+    lat: 15.2850,
+    lng: 120.5690,
     reportedBy: "Motorist Carlo R.",
     isUserReport: false,
     createdAt: new Date(Date.now() - 28 * 60 * 1000).toISOString(),
-    description: "Sedan and delivery van sideswiped. Road partially blocked, traffic backing up.",
+    description: "Delivery tricycle and utility van sideswiped. Southbound lane partially blocked, Tanod traffic control en route.",
     responder: "Traffic Tanod & Tow Unit ⚠️",
     votes: 11,
   },
   {
     id: "INC-2026-012",
-    title: "Downed Acacia Tree Branch Leaning on Cables",
+    title: "Downed Acacia Tree Branch Leaning on Power Wires",
     category: "hazard",
     severity: "medium",
-    status: "Pending",
-    locationName: "Dao St. near Community Park",
-    lat: 14.5618,
-    lng: 121.0261,
-    reportedBy: "Homeowner Association",
+    status: "Pending Review",
+    locationName: "Sitio San Roque Entry Road, Anupul",
+    lat: 15.2931,
+    lng: 120.5750,
+    reportedBy: "Homeowners Association",
     isUserReport: false,
     createdAt: new Date(Date.now() - 65 * 60 * 1000).toISOString(),
-    description: "Large tree limb snapped during gusty wind, resting dangerously on telecomm wires.",
+    description: "Large tree limb snapped during gusty wind, resting dangerously on telecommunications lines.",
     responder: "Barangay Maintenance ⚡",
     votes: 5,
   },
@@ -316,6 +317,11 @@ export function IncidentProvider({ children }) {
     if (!saved) return INITIAL_INCIDENTS;
     try {
       const parsed = JSON.parse(saved);
+      // Automatically reset if old Makati coordinates (< 15.0 lat) are detected
+      const hasOldMakatiCoords = Array.isArray(parsed) && parsed.some((i) => i.lat && i.lat < 15.0);
+      if (hasOldMakatiCoords) {
+        return INITIAL_INCIDENTS;
+      }
       return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_INCIDENTS;
     } catch {
       return INITIAL_INCIDENTS;
@@ -358,6 +364,69 @@ export function IncidentProvider({ children }) {
     return () => clearInterval(timer);
   }, []);
 
+  const [isBackendOnline, setIsBackendOnline] = useState(false);
+
+  // Sync data with backend API (Express + MongoDB)
+  const refreshFromBackend = useCallback(async () => {
+    try {
+      const health = await healthApi.check();
+      if (health.success) {
+        setIsBackendOnline(true);
+
+        // Fetch live incidents from backend
+        const incRes = await incidentsApi.getAll();
+        if (incRes.success && Array.isArray(incRes.data) && incRes.data.length > 0) {
+          const mappedIncidents = incRes.data.map((inc) => ({
+            id: inc.customId || inc.id || inc._id,
+            _id: inc._id,
+            title: inc.title,
+            category: (inc.category || inc.incidentType || 'flood').toLowerCase(),
+            severity: (inc.severity || inc.urgency || 'medium').toLowerCase(),
+            status: inc.status || 'Pending',
+            locationName: inc.locationName || inc.exactLocation || inc.purok || 'Barangay Anupul',
+            lat: inc.lat ?? 14.5605,
+            lng: inc.lng ?? 121.0182,
+            reportedBy: inc.reportedBy || inc.reporterName || 'Resident',
+            isUserReport: inc.isUserReport ?? true,
+            createdAt: inc.createdAt || new Date().toISOString(),
+            description: inc.description || '',
+            responder: inc.responder || 'Barangay Operations Desk',
+            votes: inc.votes || 1,
+            imageEvidence: inc.imageEvidence || '',
+          }));
+          setIncidents(mappedIncidents);
+        }
+
+        // Fetch live emergency alerts / announcements from backend
+        const alertRes = await alertsApi.getAll();
+        if (alertRes.success && Array.isArray(alertRes.data) && alertRes.data.length > 0) {
+          const mappedAlerts = alertRes.data.map((al) => ({
+            id: al._id || al.id,
+            _id: al._id,
+            title: al.title,
+            date: al.createdAt ? new Date(al.createdAt).toLocaleString() : 'Recent Advisory',
+            badge: al.severity === 'Critical' ? 'EMERGENCY ALERT' : al.severity === 'High' ? 'WEATHER ADVISORY' : 'PUBLIC NOTICE',
+            badgeType: (al.severity === 'Critical' || al.severity === 'High') ? 'warning' : 'notice',
+            author: al.issuerName || 'Barangay Operations',
+            summary: al.description || al.instructions || '',
+          }));
+          setAnnouncements(mappedAlerts);
+        }
+      } else {
+        setIsBackendOnline(false);
+      }
+    } catch (err) {
+      console.warn('Backend sync notice:', err.message);
+      setIsBackendOnline(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshFromBackend();
+    const interval = setInterval(refreshFromBackend, 30000);
+    return () => clearInterval(interval);
+  }, [refreshFromBackend]);
+
   // Dynamically enrich incidents with exact timestamp and live elapsed relative time
   const enrichedIncidents = useMemo(() => {
     return incidents.map((inc) => {
@@ -375,11 +444,12 @@ export function IncidentProvider({ children }) {
     });
   }, [incidents, now]);
 
-  // Add a new incident report with real-time ISO createdAt
-  const addIncident = (newIncident) => {
+  // Add a new incident report with real-time ISO createdAt and backend Cloudinary + MongoDB sync
+  const addIncident = async (newIncident) => {
+    const tempId = `INC-2026-${String(incidents.length + 1).padStart(3, "0")}`;
     const formatted = {
       ...newIncident,
-      id: `INC-2026-${String(incidents.length + 1).padStart(3, "0")}`,
+      id: tempId,
       createdAt: new Date().toISOString(),
       reportedBy: CURRENT_USER.name,
       status: "Pending Review",
@@ -398,13 +468,52 @@ export function IncidentProvider({ children }) {
       severity: formatted.severity === "critical" ? "critical" : "warning",
     });
 
+    // Asynchronously push to backend (uploads live snapshot to Cloudinary & saves to MongoDB)
+    try {
+      const payload = {
+        title: formatted.title,
+        category: formatted.category,
+        severity: formatted.severity,
+        locationName: formatted.locationName,
+        lat: formatted.lat,
+        lng: formatted.lng,
+        description: formatted.description,
+        reportedBy: formatted.reportedBy,
+        reporterContact: CURRENT_USER.phone,
+        imageEvidence: formatted.imageEvidence || "",
+        responder: formatted.responder,
+        urgency: formatted.severity === "critical" ? "Critical" : formatted.severity === "high" ? "High" : "Medium",
+      };
+
+      const res = await incidentsApi.create(payload);
+      if (res.success && res.data) {
+        const saved = res.data;
+        const realId = saved.customId || saved.id || saved._id;
+        setIncidents((prev) =>
+          prev.map((i) =>
+            i.id === tempId
+              ? {
+                  ...i,
+                  id: realId,
+                  _id: saved._id,
+                  imageEvidence: saved.imageEvidence || i.imageEvidence,
+                }
+              : i
+          )
+        );
+        setFocusedIncidentId(realId);
+      }
+    } catch (err) {
+      console.warn("Backend incident submission note:", err.message);
+    }
+
     return formatted;
   };
 
   // Update status (e.g., mark resolved or dispatched)
-  const updateIncidentStatus = (id, newStatus) => {
+  const updateIncidentStatus = async (id, newStatus) => {
     setIncidents((prev) =>
-      prev.map((inc) => (inc.id === id ? { ...inc, status: newStatus } : inc))
+      prev.map((inc) => (inc.id === id || inc._id === id ? { ...inc, status: newStatus } : inc))
     );
 
     logAuditEvent({
@@ -415,12 +524,18 @@ export function IncidentProvider({ children }) {
       details: `Status updated to '${newStatus}'.`,
       severity: newStatus === "Resolved" ? "info" : "notice",
     });
+
+    try {
+      await incidentsApi.update(id, { status: newStatus });
+    } catch (err) {
+      console.warn("Backend status update note:", err.message);
+    }
   };
 
-  const updateIncidentDetails = (id, newStatus, newResponder) => {
+  const updateIncidentDetails = async (id, newStatus, newResponder) => {
     setIncidents((prev) =>
       prev.map((inc) =>
-        String(inc.id) === String(id)
+        String(inc.id) === String(id) || String(inc._id) === String(id)
           ? { ...inc, status: newStatus, responder: newResponder }
           : inc
       )
@@ -434,11 +549,44 @@ export function IncidentProvider({ children }) {
       details: `Updated Incident #${id}: Status -> ${newStatus}, Assigned -> ${newResponder}.`,
       severity: "notice",
     });
+
+    try {
+      await incidentsApi.update(id, { status: newStatus, responder: newResponder });
+    } catch (err) {
+      console.warn("Backend dispatch update note:", err.message);
+    }
   };
 
-  const addAnnouncement = (title, message, priority) => {
+  // Full incident update (when resident or official updates details, location, severity, category, photo)
+  const updateIncident = async (id, updatedFields) => {
+    setIncidents((prev) =>
+      prev.map((inc) =>
+        String(inc.id) === String(id) || String(inc._id) === String(id)
+          ? { ...inc, ...updatedFields }
+          : inc
+      )
+    );
+
+    logAuditEvent({
+      category: AUDIT_CATEGORIES.DISPATCH,
+      action: "Incident Information Updated",
+      actor: CURRENT_USER.name,
+      target: String(id),
+      details: `Updated details for Incident #${id}: ${updatedFields.title || "Information amended"}.`,
+      severity: "notice",
+    });
+
+    try {
+      await incidentsApi.update(id, updatedFields);
+    } catch (err) {
+      console.warn("Backend incident update note:", err.message);
+    }
+  };
+
+  const addAnnouncement = async (title, message, priority) => {
+    const tempId = `ANN-${Date.now()}`;
     const newAnn = {
-      id: `ANN-${Date.now()}`,
+      id: tempId,
       title,
       summary: message,
       badge: priority === "Emergency" ? "EMERGENCY ALERT" : priority === "Weather Advisory" ? "WEATHER ADVISORY" : "GENERAL INFO",
@@ -456,6 +604,36 @@ export function IncidentProvider({ children }) {
       details: `Issued announcement: "${title}" (Priority: ${priority}).`,
       severity: priority === "Emergency" ? "critical" : "notice",
     });
+
+    try {
+      const typeMap = {
+        Emergency: "Fire",
+        "Weather Advisory": "Flood",
+        General: "General Advisory",
+      };
+      const severityMap = {
+        Emergency: "Critical",
+        "Weather Advisory": "High",
+        General: "Moderate",
+      };
+
+      const res = await alertsApi.create({
+        title,
+        description: message,
+        type: typeMap[priority] || "General Advisory",
+        severity: severityMap[priority] || "Moderate",
+        instructions: "Follow barangay safety protocols and instructions.",
+      });
+
+      if (res.success && res.data) {
+        const saved = res.data;
+        setAnnouncements((prev) =>
+          prev.map((a) => (a.id === tempId ? { ...a, id: saved._id, _id: saved._id } : a))
+        );
+      }
+    } catch (err) {
+      console.warn("Backend announcement creation note:", err.message);
+    }
 
     return newAnn;
   };
@@ -547,10 +725,13 @@ export function IncidentProvider({ children }) {
         clusteredCategories,
         isHeatmapActive,
         addIncident,
+        updateIncident,
         updateIncidentStatus,
         updateIncidentDetails,
         announcements,
         addAnnouncement,
+        isBackendOnline,
+        refreshFromBackend,
       }}
     >
       {children}

@@ -11,7 +11,8 @@ import {
   ArrowRight,
   PlusCircle,
   ShieldCheck,
-  RotateCcw
+  RotateCcw,
+  Edit3
 } from "lucide-react";
 import { useIncidents, INCIDENT_CATEGORIES } from "../context/IncidentContext";
 
@@ -183,6 +184,29 @@ export default function MyReports() {
 
                   <p className="report-item-desc">{report.description}</p>
 
+                  {report.imageEvidence && (
+                    <div style={{ margin: "0.75rem 0" }}>
+                      <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#64748b", display: "block", marginBottom: "0.35rem" }}>
+                        📸 Live Camera Evidence:
+                      </span>
+                      <img
+                        src={report.imageEvidence}
+                        alt="Incident Evidence"
+                        style={{
+                          maxWidth: "260px",
+                          maxHeight: "170px",
+                          objectFit: "cover",
+                          borderRadius: "10px",
+                          border: "1px solid #cbd5e1",
+                          display: "block",
+                          cursor: "pointer",
+                        }}
+                        onClick={() => window.open(report.imageEvidence, "_blank")}
+                        title="Click to view full size"
+                      />
+                    </div>
+                  )}
+
                   {/* Progress Timeline */}
                   <div className="timeline-tracker">
                     <div className="timeline-steps">
@@ -226,6 +250,15 @@ export default function MyReports() {
                           ? "Reopen Report"
                           : "Mark Resolved"}
                       </button>
+
+                      <Link
+                        to={`/report-incident?edit=${report.id}`}
+                        className="btn-card-edit-action"
+                        title="Update information or photos for this incident report"
+                      >
+                        <Edit3 size={14} />
+                        <span>Update Info</span>
+                      </Link>
 
                       <Link
                         to={`/map?id=${report.id}`}

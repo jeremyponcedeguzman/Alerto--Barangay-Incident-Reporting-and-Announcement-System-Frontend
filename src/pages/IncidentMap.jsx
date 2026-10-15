@@ -299,9 +299,19 @@ export default function IncidentMap() {
             <span class="popup-status status-${incident.status.toLowerCase().replace(" ", "-")}">${incident.status}</span>
           </div>
           <p class="popup-desc">${incident.description}</p>
-          <div class="popup-actions">
-            <button class="popup-btn-select" id="btn-popup-select-${incident.id}">
+          ${
+            incident.imageEvidence
+              ? `<div style="margin: 6px 0;">
+                   <img src="${incident.imageEvidence}" alt="Live Camera Evidence" style="width: 100%; max-height: 125px; object-fit: cover; border-radius: 6px; border: 1px solid #cbd5e1; display: block;" />
+                 </div>`
+              : ""
+          }
+          <div class="popup-actions" style="display: flex; gap: 8px; margin-top: 8px;">
+            <button class="popup-btn-select" id="btn-popup-select-${incident.id}" style="flex: 1;">
               Focus Details
+            </button>
+            <button class="popup-btn-update" id="btn-popup-update-${incident.id}" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 4px; background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; border-radius: 6px; padding: 6px 10px; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.15s ease;">
+              ✏️ Update Info
             </button>
           </div>
         `;
@@ -311,6 +321,12 @@ export default function IncidentMap() {
           ?.addEventListener("click", () => {
             setSelectedIncident(incident);
             setSidebarOpen(true);
+          });
+
+        popupContent
+          .querySelector(`#btn-popup-update-${incident.id}`)
+          ?.addEventListener("click", () => {
+            navigate(`/report-incident?edit=${incident.id}`);
           });
 
         marker.bindPopup(popupContent, {
@@ -463,7 +479,7 @@ export default function IncidentMap() {
           <button
             className="map-action-btn"
             onClick={handleRecenter}
-            title="Recenter map to Barangay [Barangay Name] Center"
+            title="Recenter map to Barangay Anupul Center"
           >
             <Crosshair size={16} />
             <span className="hide-on-mobile">Brgy Center</span>
@@ -524,7 +540,7 @@ export default function IncidentMap() {
           <div className="map-floating-legend">
             <div className="legend-header">
               <span className="legend-title">Live Map Legend</span>
-              <span className="legend-subtitle">Barangay [Barangay Name] Response Grid</span>
+              <span className="legend-subtitle">Barangay Anupul Response Grid</span>
             </div>
             <div className="legend-items-grid">
               <div className="legend-row">
@@ -699,6 +715,23 @@ export default function IncidentMap() {
                         {incident.description}
                       </p>
 
+                      {incident.imageEvidence && (
+                        <div style={{ margin: "0.4rem 0" }}>
+                          <img
+                            src={incident.imageEvidence}
+                            alt="Incident Evidence"
+                            style={{
+                              width: "100%",
+                              maxHeight: "130px",
+                              objectFit: "cover",
+                              borderRadius: "8px",
+                              border: "1px solid #e2e8f0",
+                              display: "block",
+                            }}
+                          />
+                        </div>
+                      )}
+
                       <div className="card-footer-row">
                         <span className="card-timestamp" title={incident.exactTime}>
                           <Clock size={12} />
@@ -734,7 +767,7 @@ export default function IncidentMap() {
                                 : "Mark as Resolved"}
                             </button>
                             <Link
-                              to={`/report-incident`}
+                              to={`/report-incident?edit=${incident.id}`}
                               className="btn-action-outline"
                             >
                               Update Info

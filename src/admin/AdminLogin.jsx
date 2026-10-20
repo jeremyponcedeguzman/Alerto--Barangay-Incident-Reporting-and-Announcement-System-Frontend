@@ -5,45 +5,80 @@ import { useAuth } from "../context/AuthContext";
 export default function AdminLogin() {
   const navigate = useNavigate();
   const auth = useAuth() || {};
-  const { login } = auth;
+  const { login: contextLogin } = auth;
 
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMsg("");
 
     if (!identifier.trim() || !password) {
-      setErrorMsg("Please enter your admin email/username and password.");
+      setErrorMsg("Please enter your admin email and password.");
       return;
     }
 
-    const cleanId = identifier.trim().toLowerCase();
+    const cleanEmail = identifier.trim().toLowerCase();
 
-    // Enforce strict separation: Only allow @anupul.gov emails on the admin login portal
-    if (!cleanId.endsWith("@anupul.gov")) {
+    // Enforce domain check for official accounts
+    if (!cleanEmail.endsWith("@anupul.gov")) {
       setErrorMsg("Access denied. Admin portal is strictly for @anupul.gov official accounts.");
       return;
     }
 
-    if (login) {
-      const result = login(identifier, password);
+    setIsLoading(true);
 
-      if (result && result.success) {
-        if (result.user?.role === "admin" || cleanId === "admin@anupul.gov") {
-          navigate("/admin-approvals");
-        } else {
-          setErrorMsg("This account does not have administrator privileges.");
-        }
-      } else if (result?.isPending) {
-        setErrorMsg("⏳ Your official account is currently pending approval by the Head Barangay Official. Please wait for authorization before logging in.");
-      } else if (result?.isRejected) {
-        setErrorMsg("✕ Your official account application was rejected by the Head Barangay Official.");
-      } else {
-        setErrorMsg(result?.message || "Invalid Barangay Admin credentials. Access denied.");
+    try {
+      // 1. Send authentication request to Express backend
+      const response = await fetch("http://localhost:5000/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: cleanEmail,
+          password,
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data.message || "Invalid credentials. Access denied.");
       }
+
+      // 2. Persist authentication session
+      if (data.token) {
+        localStorage.setItem("token", data.token);
+      }
+      if (data.user) {
+        localStorage.setItem("user", JSON.stringify(data.user));
+      }
+
+      // 3. Keep local React AuthContext synchronized if supported
+      if (typeof contextLogin === "function") {
+        try {
+          contextLogin(cleanEmail, password);
+        } catch {
+          // Fallback if context implementation is purely synchronous mock
+        }
+      }
+
+      // 4. Verify admin role and route to approvals dashboard
+      const userRole = data.user?.role?.toLowerCase();
+      if (userRole === "admin" || userRole === "barangay official" || cleanEmail === "admin@anupul.gov") {
+        navigate("/admin-approvals");
+      } else {
+        setErrorMsg("This account does not have official administrator privileges.");
+      }
+    } catch (err) {
+      console.error("Admin login error:", err);
+      setErrorMsg(err.message || "Failed to connect to the authentication server.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -78,9 +113,9 @@ export default function AdminLogin() {
               borderRadius: "8px", 
               fontSize: "0.82rem", 
               fontWeight: 600, 
-              lineHeight: "1.4",
-              marginBottom: "1.25rem",
-              border: errorMsg.includes("⏳") ? "1px solid #fde68a" : "1px solid #fecaca"
+              lineHeight: "1.4", 
+              marginBottom: "1.25rem", 
+              border: errorMsg.includes("⏳") ? "1px solid #fde68a" : "1px solid #fecaca" 
             }}>
               {errorMsg}
             </div>
@@ -93,6 +128,7 @@ export default function AdminLogin() {
               </label>
               <input
                 type="email"
+                required
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
                 placeholder="official@anupul.gov"
@@ -106,6 +142,7 @@ export default function AdminLogin() {
               </label>
               <input
                 type="password"
+                required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
@@ -119,18 +156,19 @@ export default function AdminLogin() {
 
             <button
               type="submit"
+              disabled={isLoading}
               style={{
                 padding: "0.75rem",
-                backgroundColor: "#0f172a",
+                backgroundColor: isLoading ? "#475569" : "#0f172a",
                 color: "white",
                 border: "none",
                 borderRadius: "8px",
                 fontWeight: 700,
-                cursor: "pointer",
+                cursor: isLoading ? "not-allowed" : "pointer",
                 marginTop: "0.25rem"
               }}
             >
-              Log In as Barangay Official
+              {isLoading ? "Authenticating..." : "Log In as Barangay Official"}
             </button>
           </form>
         </div>

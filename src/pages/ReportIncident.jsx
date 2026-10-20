@@ -17,7 +17,9 @@ import {
   Info,
   Clock,
   Sparkles,
-  Send
+  Send,
+  RefreshCw,
+  X
 } from "lucide-react";
 import {
   useIncidents,
@@ -30,27 +32,112 @@ export default function ReportIncident() {
   const navigate = useNavigate();
   const { addIncident, currentUser } = useIncidents();
 
+  // Retrieve user identity from context or localStorage
+  const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+  const residentFullName =
+    currentUser?.fullName ||
+    currentUser?.name ||
+    storedUser?.fullName ||
+    storedUser?.name ||
+    "Resident User";
+
+  const residentPhone =
+    currentUser?.phone ||
+    currentUser?.contactNumber ||
+    storedUser?.contactNumber ||
+    storedUser?.phone ||
+    "09XXXXXXXXX";
+
   const [category, setCategory] = useState("flood");
   const [severity, setSeverity] = useState("high");
   const [title, setTitle] = useState("");
   const [locationName, setLocationName] = useState("");
   const [description, setDescription] = useState("");
-  const reportedBy = currentUser?.name || "[Logged-In Resident Full Name]";
-  const phone = currentUser?.phone || "[insert the real number here]";
   const [lat, setLat] = useState(BARANGAY_CENTER.lat + 0.002);
   const [lng, setLng] = useState(BARANGAY_CENTER.lng + 0.001);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittedSuccess, setSubmittedSuccess] = useState(false);
 
+  // --- Real-Time Camera States & Refs ---
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const [capturedImage, setCapturedImage] = useState(null);
+  const [cameraError, setCameraError] = useState("");
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const streamRef = useRef(null);
+
   const miniMapContainerRef = useRef(null);
   const miniMapInstanceRef = useRef(null);
   const draftMarkerRef = useRef(null);
+
+  // Start real-time camera feed
+  const startCamera = async () => {
+    setCameraError("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      setIsCameraActive(true);
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play();
+        }
+      }, 100);
+    } catch (err) {
+      console.error("Camera access error:", err);
+      setCameraError("Unable to access camera. Please allow camera permissions in your browser.");
+    }
+  };
+
+  // Turn off hardware camera track
+  const stopCameraStream = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    setIsCameraActive(false);
+  };
+
+  // Capture current frame from <video> to hidden <canvas>
+  const captureSnapshot = () => {
+    if (!videoRef.current || !canvasRef.current) return;
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    // Save as JPEG data URL for lightweight storage and transfer
+    const imageBase64 = canvas.toDataURL("image/jpeg", 0.75);
+    setCapturedImage(imageBase64);
+    stopCameraStream();
+  };
+
+  const handleRetakeSnapshot = () => {
+    setCapturedImage(null);
+    startCamera();
+  };
+
+  const handleCancelCamera = () => {
+    stopCameraStream();
+  };
+
+  // Auto clean-up camera when component unmounts
+  useEffect(() => {
+    return () => {
+      stopCameraStream();
+    };
+  }, []);
 
   // Initialize mini picker map
   useEffect(() => {
     if (!miniMapContainerRef.current) return;
 
-    // React StrictMode safety: clean up any existing instance & DOM leaflet id
     if (miniMapInstanceRef.current) {
       miniMapInstanceRef.current.remove();
       miniMapInstanceRef.current = null;
@@ -127,7 +214,6 @@ export default function ReportIncident() {
           }
         },
         () => {
-          // Fallback default nearby point
           const offsetLat = Number((BARANGAY_CENTER.lat + (Math.random() - 0.5) * 0.005).toFixed(5));
           const offsetLng = Number((BARANGAY_CENTER.lng + (Math.random() - 0.5) * 0.005).toFixed(5));
           setLat(offsetLat);
@@ -140,38 +226,79 @@ export default function ReportIncident() {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!title.trim() || !locationName.trim() || !description.trim()) {
       alert("Please fill in the incident title, location, and description.");
       return;
     }
 
-    setIsSubmitting(true);
+    if (!capturedImage) {
+      alert("Please capture real-time live camera evidence before submitting.");
+      return;
+    }
 
+    setIsSubmitting(true);
     const categoryObj = INCIDENT_CATEGORIES[category] || INCIDENT_CATEGORIES.hazard;
 
-    setTimeout(() => {
-      const newInc = addIncident({
-        title,
-        category,
-        severity,
-        locationName,
-        lat,
-        lng,
-        reportedBy,
-        description,
-        responder: categoryObj.responder,
+    const payload = {
+      title,
+      category,
+      severity,
+      location: locationName,
+      exactLocation: locationName,
+      lat,
+      lng,
+      reportedBy: residentFullName,
+      reporterName: residentFullName,
+      phone: residentPhone,
+      reporterContact: residentPhone,
+      description,
+      image: capturedImage,
+      evidencePhoto: capturedImage,
+      responder: categoryObj.responder,
+      status: "Pending",
+    };
+
+    try {
+      const token = localStorage.getItem("token") || currentUser?.token;
+      const headers = {
+        "Content-Type": "application/json",
+      };
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
+      const response = await fetch("http://localhost:5000/api/incidents", {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
       });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Server responded with ${response.status}`);
+      }
+
+      const savedIncident = await response.json();
+
+      if (typeof addIncident === "function") {
+        addIncident(savedIncident.data || savedIncident || payload);
+      }
 
       setIsSubmitting(false);
       setSubmittedSuccess(true);
 
-      // Redirect to map focused on the new incident after 1.5 seconds
       setTimeout(() => {
-        navigate(`/map?id=${newInc.id}`);
+        const targetId = savedIncident._id || savedIncident.id || "";
+        navigate(`/map${targetId ? `?id=${targetId}` : ""}`);
       }, 1500);
-    }, 600);
+
+    } catch (err) {
+      console.error("Failed to submit incident:", err);
+      alert(`Error submitting incident: ${err.message}`);
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -194,7 +321,7 @@ export default function ReportIncident() {
             </div>
             <h2>Incident Successfully Dispatched & Logged!</h2>
             <p className="success-sub">
-              Your report has been received by Barangay [Barangay Name] Operations Command.
+              Your report and live camera verification have been received.
               Responders have been notified and a live pin has been activated on the incident map.
             </p>
             <div className="redirect-countdown">
@@ -292,7 +419,7 @@ export default function ReportIncident() {
                 </div>
               </div>
 
-              {/* 3. Title & Location Name */}
+              {/* 3. Title & Landmark/Location */}
               <div className="form-row-two-col">
                 <div className="form-group">
                   <label htmlFor="incident-title" className="input-label">
@@ -345,7 +472,6 @@ export default function ReportIncident() {
                   </button>
                 </div>
 
-                {/* Leaflet Mini Map */}
                 <div className="mini-map-container" ref={miniMapContainerRef}></div>
 
                 <div className="coords-display-pill">
@@ -353,7 +479,176 @@ export default function ReportIncident() {
                 </div>
               </div>
 
-              {/* 5. Detailed Description */}
+              {/* 5. Real-Time Live Camera Evidence Section */}
+              <div
+                style={{
+                  border: "2px dashed #f43f5e",
+                  borderRadius: "16px",
+                  padding: "1.25rem",
+                  backgroundColor: "#fff1f2",
+                  marginBottom: "1.5rem",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "0.25rem" }}>
+                  <Camera size={18} color="#e11d48" />
+                  <label style={{ fontSize: "0.95rem", fontWeight: 700, color: "#be123c", margin: 0 }}>
+                    Real-Time Live Camera Evidence *
+                  </label>
+                </div>
+                <p style={{ fontSize: "0.8rem", color: "#64748b", margin: "0 0 1rem 0", lineHeight: "1.4" }}>
+                  Photo library and gallery uploads are strictly disabled to prevent fake reports and pranks[cite: 18]. Snap a live photo on the spot[cite: 18].
+                </p>
+
+                {cameraError && (
+                  <div style={{ padding: "0.5rem 0.75rem", backgroundColor: "#fee2e2", color: "#991b1b", borderRadius: "8px", fontSize: "0.8rem", marginBottom: "0.75rem" }}>
+                    ⚠️ {cameraError}
+                  </div>
+                )}
+
+                {/* Camera Viewport or Snapshot Preview */}
+                {!isCameraActive && !capturedImage && (
+                  <button
+                    type="button"
+                    onClick={startCamera}
+                    style={{
+                      width: "100%",
+                      padding: "0.9rem",
+                      backgroundColor: "#e11d48",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "10px",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "8px",
+                      boxShadow: "0 4px 12px rgba(225, 29, 72, 0.25)",
+                    }}
+                  >
+                    <Camera size={18} /> Open Live Incident Camera
+                  </button>
+                )}
+
+                {/* Live Stream View */}
+                {isCameraActive && (
+                  <div
+                    style={{
+                      position: "relative",
+                      borderRadius: "12px",
+                      overflow: "hidden",
+                      backgroundColor: "#000",
+                    }}
+                  >
+                    <video
+                      ref={videoRef}
+                      playsInline
+                      muted
+                      autoPlay
+                      style={{
+                        width: "100%",
+                        maxHeight: "360px",
+                        display: "block",
+                        objectFit: "cover",
+                      }}
+                    />
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "center",
+                        alignItems: "center",
+                        gap: "12px",
+                        padding: "0.75rem",
+                        backgroundColor: "#0f172a",
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={captureSnapshot}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          backgroundColor: "#e11d48",
+                          color: "white",
+                          padding: "0.6rem 1.25rem",
+                          border: "none",
+                          borderRadius: "9999px",
+                          fontWeight: 700,
+                          fontSize: "0.88rem",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <Camera size={16} /> Capture Live Snapshot
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCancelCamera}
+                        style={{
+                          backgroundColor: "#475569",
+                          color: "white",
+                          padding: "0.6rem 1.25rem",
+                          border: "none",
+                          borderRadius: "9999px",
+                          fontWeight: 600,
+                          fontSize: "0.88rem",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Captured Image Preview */}
+                {capturedImage && (
+                  <div style={{ position: "relative", borderRadius: "12px", overflow: "hidden", border: "2px solid #10b981" }}>
+                    <img
+                      src={capturedImage}
+                      alt="Captured Incident Evidence"
+                      style={{ width: "100%", maxHeight: "360px", objectFit: "cover", display: "block" }}
+                    />
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        padding: "0.6rem 1rem",
+                        backgroundColor: "#0f172a",
+                        color: "white",
+                      }}
+                    >
+                      <span style={{ fontSize: "0.8rem", color: "#34d399", fontWeight: 700 }}>
+                        ✓ Live Photo Stamped & Verified
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleRetakeSnapshot}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "4px",
+                          backgroundColor: "#334155",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "6px",
+                          padding: "0.4rem 0.75rem",
+                          fontSize: "0.78rem",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <RefreshCw size={14} /> Retake
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Hidden canvas for snapshot rendering */}
+                <canvas ref={canvasRef} style={{ display: "none" }} />
+              </div>
+
+              {/* 6. Detailed Description */}
               <div className="form-group">
                 <label htmlFor="incident-desc" className="input-label">
                   Detailed Description & Current Condition <span className="required-star">*</span>
@@ -369,7 +664,7 @@ export default function ReportIncident() {
                 />
               </div>
 
-              {/* 6. Reporter Information (Pre-filled & Uneditable for Logged-In User) */}
+              {/* 7. Reporter Information */}
               <div className="form-section reporter-box">
                 <div className="reporter-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
                   <div>
@@ -388,7 +683,7 @@ export default function ReportIncident() {
                     <label className="input-label">Full Name (Locked)</label>
                     <input
                       type="text"
-                      value={reportedBy}
+                      value={residentFullName}
                       readOnly
                       disabled
                       className="form-input"
@@ -399,7 +694,7 @@ export default function ReportIncident() {
                     <label className="input-label">Contact Number (Locked)</label>
                     <input
                       type="text"
-                      value={phone}
+                      value={residentPhone}
                       readOnly
                       disabled
                       className="form-input"

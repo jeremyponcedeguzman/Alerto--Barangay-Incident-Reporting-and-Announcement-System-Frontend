@@ -5,7 +5,7 @@ import { useAuth } from "../context/AuthContext";
 export default function Login() {
   const navigate = useNavigate();
   const auth = useAuth() || {};
-  const { register, login, userDatabase = [] } = auth;
+  const { register: contextRegister, login: contextLogin } = auth;
 
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
@@ -52,7 +52,8 @@ export default function Login() {
     }
   };
 
-  const handleLoginSubmit = (e) => {
+  // --- 1. Resident Login (Hits POST /api/residents/login directly) ---
+  const handleLoginSubmit = async (e) => {
     e.preventDefault();
     setAuthError("");
     const newErrors = {};
@@ -66,26 +67,73 @@ export default function Login() {
 
     setErrors(newErrors);
 
-    if (Object.keys(newErrors).length === 0 && login) {
+    if (Object.keys(newErrors).length === 0) {
       const cleanId = loginData.identifier.trim().toLowerCase();
 
-      // Prevent barangay officials from logging in via the resident portal
+      // Prevent officials from logging in via the resident portal
       if (cleanId.endsWith("@anupul.gov") || cleanId === "admin@anupul.gov") {
         setAuthError("Barangay officials must log in through the Official Admin Portal.");
         return;
       }
 
-      const result = login(loginData.identifier, loginData.password);
-      if (result && result.success) {
-        navigate("/");
-      } else if (result?.isPending || result?.isRejected) {
-        navigate("/");
-      } else {
-        setAuthError(result?.message || "Invalid credentials.");
+      setIsSubmitting(true);
+
+      try {
+        const response = await fetch("http://localhost:5000/api/residents/login", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            identifier: loginData.identifier.trim(),
+            password: loginData.password,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.message || "Invalid login credentials.");
+        }
+
+        const resident = data.resident;
+        const currentStatus = (resident.status || resident.verificationStatus || "pending").toLowerCase();
+
+        // Save fresh approved session to localStorage
+        localStorage.setItem("alerto_current_user", JSON.stringify(resident));
+        localStorage.setItem("user", JSON.stringify(resident));
+        if (data.token) {
+          localStorage.setItem("token", data.token);
+        }
+
+        // Keep local context synced
+        if (typeof contextLogin === "function") {
+          try {
+            contextLogin(loginData.identifier, loginData.password);
+          } catch {
+            // Context fallback
+          }
+        }
+
+        // Route based on approval status
+        if (currentStatus === "approved") {
+          navigate("/");
+        } else if (currentStatus === "rejected") {
+          setAuthError("✕ Your residency application was rejected by Barangay Officials.");
+        } else {
+          // Account still pending approval
+          navigate("/");
+        }
+      } catch (err) {
+        console.error("Login verification error:", err);
+        setAuthError(err.message || "Failed to connect to authentication server.");
+      } finally {
+        setIsSubmitting(false);
       }
     }
   };
 
+  // --- 2. Resident Registration ---
   const handleSignupSubmit = async (e) => {
     e.preventDefault();
     setAuthError("");
@@ -102,13 +150,6 @@ export default function Login() {
       newErrors.email = "Please enter a valid email address.";
     } else if (signupData.email.toLowerCase().endsWith("@anupul.gov")) {
       newErrors.email = "Residents cannot use an @anupul.gov email. Please use a personal email.";
-    } else {
-      const existingEmailUser = (userDatabase || []).find(
-        (user) => user?.email?.toLowerCase().trim() === signupData.email.toLowerCase().trim()
-      );
-      if (existingEmailUser) {
-        newErrors.email = "An account with this email address already exists. Please log in instead.";
-      }
     }
 
     if (!signupData.password) {
@@ -134,15 +175,21 @@ export default function Login() {
     if (Object.keys(newErrors).length === 0) {
       setIsSubmitting(true);
       try {
-        // Map frontend fields directly to backend Mongoose Resident Schema
         const residentPayload = {
           fullName: `${signupData.firstName.trim()} ${signupData.lastName.trim()}`,
+          firstName: signupData.firstName.trim(),
+          lastName: signupData.lastName.trim(),
+          email: signupData.email.trim().toLowerCase(),
+          password: signupData.password,
           contactNumber: signupData.contactNumber.trim(),
-          purok: signupData.sitioAddress,
+          sitioAddress: signupData.sitioAddress,
+          sitio: signupData.sitioAddress,
           address: `${signupData.sitioAddress}, Barangay Anupul, Bamban, Tarlac`,
+          proofOfResidency: signupData.proofOfResidency?.name || "Uploaded Document",
+          status: "pending",
+          verificationStatus: "pending",
         };
 
-        // Post directly to Express backend
         const response = await fetch("http://localhost:5000/api/residents/register", {
           method: "POST",
           headers: {
@@ -159,13 +206,16 @@ export default function Login() {
           return;
         }
 
-        // Sync local context state with the generated MongoDB _id
-        if (register) {
-          await register({
+        // Sync local context state
+        if (contextRegister) {
+          await contextRegister({
             ...signupData,
             _id: data.data?._id,
+            id: data.data?._id,
             sitio: signupData.sitioAddress,
-            purok: signupData.sitioAddress,
+            sitioAddress: signupData.sitioAddress,
+            status: "pending",
+            verificationStatus: "pending",
           });
         }
 
@@ -208,10 +258,10 @@ export default function Login() {
         style={{ 
           marginBottom: "1rem", 
           backgroundColor: "var(--warning-light)", 
-          borderLeft: "4px solid var(--warning)",
-          color: "#92400e",
-          gap: "0.75rem",
-          padding: "0.85rem 1rem"
+          borderLeft: "4px solid var(--warning)", 
+          color: "#92400e", 
+          gap: "0.75rem", 
+          padding: "0.85rem 1rem" 
         }}
       >
         <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
@@ -281,7 +331,7 @@ export default function Login() {
                     type="text"
                     value={loginData.identifier}
                     onChange={(e) => setLoginData({ ...loginData, identifier: e.target.value })}
-                    placeholder="e.g. resident@gmail.com or 09171234567"
+                    placeholder="e.g. resident@gmail.com or 09123456789"
                     className="form-input with-icon"
                     style={errors.identifier ? { borderColor: "var(--emergency)" } : {}}
                   />
@@ -328,8 +378,13 @@ export default function Login() {
                 </a>
               </div>
 
-              <button type="submit" className="btn-hero-primary-report" style={{ width: "100%", justifyContent: "center", marginTop: "0.5rem" }}>
-                Access Alert Dashboard
+              <button 
+                type="submit" 
+                disabled={isSubmitting}
+                className="btn-hero-primary-report" 
+                style={{ width: "100%", justifyContent: "center", marginTop: "0.5rem", opacity: isSubmitting ? 0.7 : 1 }}
+              >
+                {isSubmitting ? "Verifying..." : "Access Alert Dashboard"}
               </button>
             </form>
           ) : (

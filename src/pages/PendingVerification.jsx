@@ -1,8 +1,29 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 
 export default function PendingVerification() {
-  const { currentUser, logout } = useAuth();
+  const { currentUser, logout, refreshUser } = useAuth();
+  const [isChecking, setIsChecking] = useState(false);
+
+  // Poll server every 4 seconds to check if status was approved
+  useEffect(() => {
+    // Only poll if the account is still pending
+    if (currentUser?.verificationStatus === "rejected") return;
+
+    const interval = setInterval(async () => {
+      if (refreshUser) {
+        await refreshUser();
+      }
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, [currentUser?.verificationStatus, refreshUser]);
+
+  const handleManualCheck = async () => {
+    setIsChecking(true);
+    if (refreshUser) await refreshUser();
+    setIsChecking(false);
+  };
 
   return (
     <div className="standard-page-container" style={{ maxWidth: "680px", margin: "2rem auto", fontFamily: "sans-serif" }}>
@@ -64,13 +85,43 @@ export default function PendingVerification() {
           </div>
         )}
 
-        <button
-          type="button"
-          onClick={logout}
-          style={{ padding: "0.65rem 1.25rem", backgroundColor: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: "8px", fontWeight: 700, cursor: "pointer", color: "#334155" }}
-        >
-          Log Out & Return to Login
-        </button>
+        <div style={{ display: "flex", gap: "0.75rem", justifyContent: "center" }}>
+          {currentUser?.verificationStatus !== "rejected" && (
+            <button
+              type="button"
+              onClick={handleManualCheck}
+              disabled={isChecking}
+              style={{
+                padding: "0.65rem 1.25rem",
+                backgroundColor: "#2563eb",
+                color: "#ffffff",
+                border: "none",
+                borderRadius: "8px",
+                fontWeight: 700,
+                cursor: isChecking ? "not-allowed" : "pointer",
+                opacity: isChecking ? 0.7 : 1
+              }}
+            >
+              {isChecking ? "Checking..." : "Check Status"}
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={logout}
+            style={{
+              padding: "0.65rem 1.25rem",
+              backgroundColor: "#f1f5f9",
+              border: "1px solid #cbd5e1",
+              borderRadius: "8px",
+              fontWeight: 700,
+              cursor: "pointer",
+              color: "#334155"
+            }}
+          >
+            Log Out & Return to Login
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -10,6 +10,7 @@ export default function AdminSignup() {
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
+    contactNumber: "",
     email: "",
     officialPosition: "",
     secretCode: "",
@@ -19,6 +20,7 @@ export default function AdminSignup() {
 
   const [errors, setErrors] = useState({});
   const [successMsg, setSuccessMsg] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const POSITIONS = [
     "Barangay Captain / Chairman",
@@ -40,7 +42,7 @@ export default function AdminSignup() {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const newErrors = {};
 
@@ -55,7 +57,6 @@ export default function AdminSignup() {
 
     if (!formData.officialPosition) newErrors.officialPosition = "Select an official position.";
 
-    // Case-insensitive & trimmed security code validation
     const cleanSubmittedCode = formData.secretCode.trim().toUpperCase();
     if (!formData.secretCode.trim()) {
       newErrors.secretCode = "Barangay security code is required.";
@@ -76,18 +77,46 @@ export default function AdminSignup() {
     setErrors(newErrors);
 
     if (Object.keys(newErrors).length === 0) {
-      if (registerAdmin) {
-        const result = registerAdmin(formData);
-        if (result && !result.success) {
-          setErrors({ email: result.message });
-          return;
-        }
-      }
+      setIsSubmitting(true);
+      try {
+        const payload = {
+          fullName: `${formData.firstName.trim()} ${formData.lastName.trim()}`,
+          email: formData.email.trim().toLowerCase(),
+          password: formData.password,
+          role: "Admin",
+          position: formData.officialPosition,
+          contactNumber: formData.contactNumber.trim() || "09123456789",
+        };
 
-      setSuccessMsg("Admin registration submitted! Please wait for approval before logging in.");
-      setTimeout(() => {
-        navigate("/admin/login");
-      }, 1800);
+        const response = await fetch("http://localhost:5000/api/auth/register", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          throw new Error(data.message || `Registration failed with status ${response.status}`);
+        }
+
+        if (typeof registerAdmin === "function") {
+          registerAdmin(data.user || payload);
+        }
+
+        setSuccessMsg("Admin registration submitted! You can now log in.");
+        setTimeout(() => {
+          navigate("/admin/login");
+        }, 1500);
+
+      } catch (err) {
+        console.error("Failed to register admin:", err);
+        setErrors({ email: err.message });
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -154,6 +183,20 @@ export default function AdminSignup() {
                 />
                 {errors.lastName && <p style={{ fontSize: "0.72rem", color: "#ef4444", margin: "0.2rem 0 0" }}>{errors.lastName}</p>}
               </div>
+            </div>
+
+            {/* Contact Number */}
+            <div>
+              <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, marginBottom: "0.25rem" }}>
+                Contact / Mobile Number
+              </label>
+              <input
+                type="text"
+                value={formData.contactNumber}
+                onChange={(e) => handleChange("contactNumber", e.target.value)}
+                placeholder="09XXXXXXXXX"
+                style={{ width: "100%", padding: "0.6rem", border: "1px solid #cbd5e1", borderRadius: "8px" }}
+              />
             </div>
 
             {/* Official Position */}
@@ -245,18 +288,19 @@ export default function AdminSignup() {
 
             <button
               type="submit"
+              disabled={isSubmitting}
               style={{
                 padding: "0.75rem",
-                backgroundColor: "#0f172a",
+                backgroundColor: isSubmitting ? "#64748b" : "#0f172a",
                 color: "white",
                 border: "none",
                 borderRadius: "8px",
                 fontWeight: 700,
-                cursor: "pointer",
+                cursor: isSubmitting ? "not-allowed" : "pointer",
                 marginTop: "0.5rem"
               }}
             >
-              Register Official Account
+              {isSubmitting ? "Registering..." : "Register Official Account"}
             </button>
           </form>
         </div>
